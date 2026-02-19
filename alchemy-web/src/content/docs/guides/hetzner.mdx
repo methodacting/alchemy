@@ -1,0 +1,85 @@
+---
+order: 10
+title: Hetzner Cloud
+description: Learn how to deploy virtual servers, block storage, and networking on Hetzner Cloud using Alchemy.
+---
+
+# Getting Started with Hetzner Cloud
+
+Alchemy provides first-class support for Hetzner Cloud, allowing you to manage virtual servers, high-performance block storage, and private networking using pure TypeScript.
+
+## Prerequisites
+
+To follow this tutorial, you will need:
+
+1.  A **Hetzner Cloud** account.
+2.  An **API Token** with read/write access.
+
+## Setup
+
+First, generate an API token in the [Hetzner Cloud Console](https://console.hetzner.cloud/) under your project's **Security** > **API Tokens** section.
+
+Store this token in your environment:
+
+```sh
+export HCLOUD_TOKEN="your-api-token-here"
+```
+
+## Create your first server
+
+Create an `alchemy.run.ts` file to define your infrastructure:
+
+```ts
+import { alchemy } from "alchemy";
+import { Server, Firewall } from "alchemy/hetzner";
+
+const app = await alchemy("my-hetzner-app");
+
+// 1. Define a security policy
+const fw = await Firewall("web-sec", {
+  rules: [
+    { direction: "in", protocol: "tcp", port: "80", source_ips: ["0.0.0.0/0", "::/0"] },
+    { direction: "in", protocol: "tcp", port: "443", source_ips: ["0.0.0.0/0", "::/0"] },
+    { direction: "in", protocol: "tcp", port: "22", source_ips: ["0.0.0.0/0", "::/0"] }
+  ]
+});
+
+// 2. Provision a high-performance server
+const web = await Server("web-1", {
+  serverType: "cx23",
+  image: "ubuntu-24.04",
+  location: "hel1",
+  firewalls: [{ firewall: fw.id }]
+});
+
+console.log(`Server IP: ${web.publicIp}`);
+
+await app.finalize();
+```
+
+## Deploy
+
+Run the deployment script using `bun` or `npx`:
+
+::: code-group
+
+```sh [bun]
+bun ./alchemy.run.ts
+```
+
+```sh [npm]
+npx tsx ./alchemy.run.ts
+```
+
+:::
+
+Alchemy will provision the resources and output the public IP of your new server.
+
+## Next Steps
+
+Explore the full range of Hetzner resources supported by Alchemy:
+
+- **Compute**: Use [Placement Groups](/providers/hetzner/placement-group) for high availability.
+- **Storage**: Attach persistent [Volumes](/providers/hetzner/volume) or 1TB+ [Storage Boxes](/providers/hetzner/storage-box).
+- **Networking**: Build isolated architectures with [Private Networks](/providers/hetzner/network) and [Load Balancers](/providers/hetzner/load-balancer).
+- **DNS**: Automate your domain management with [DNS Zones](/providers/hetzner/dns-zone).
