@@ -26,4 +26,6 @@ smoke
 .astro
 .wrangler
 
+.worktrees/
+
 *.tgz
