@@ -1,0 +1,76 @@
+---
+order: 50
+title: Notion
+description: Learn how to manage Notion pages and databases using Alchemy.
+---
+
+# Getting Started with Notion
+
+Notion is a powerful tool for collaborative documentation and structured data. Alchemy allows you to manage your Notion workspace as code, enabling you to bootstrap documentation structures and logs alongside your infrastructure.
+
+## Prerequisites
+
+1.  A **Notion** account.
+2.  An **Integration Token**.
+
+### Creating an Integration
+
+1.  Go to [My Integrations](https://www.notion.so/my-integrations) in the Notion developer portal.
+2.  Click **New Integration** and give it a name.
+3.  Ensure the integration has **Read**, **Update**, and **Insert** capabilities.
+4.  Copy your **Internal Integration Token**.
+5.  **Important**: Share your parent page with the integration. Go to your Notion page, click **...** > **Add Connections**, and search for your integration.
+
+Store the token in your environment:
+
+```sh
+export NOTION_TOKEN="secret_..."
+```
+
+## Knowledge as Code
+
+Create an `alchemy.run.ts` file to organize your workspace:
+
+```ts
+import { alchemy } from "alchemy";
+import { Database, Page } from "alchemy/notion";
+
+const app = await alchemy("my-docs");
+
+// 1. Create a root page for your project
+const root = await Page("root", {
+  parent: "YOUR_PARENT_PAGE_ID",
+  properties: {
+    title: [{ text: { content: "Project Hub" } }]
+  }
+});
+
+// 2. Create a database for deployment history
+const logDb = await Database("deploy-logs", {
+  parent: root,
+  title: [{ text: { content: "Infrastructure Changes" } }],
+  properties: {
+    "Change": { title: {} },
+    "System": { select: { options: [{ name: "Hetzner" }, { name: "AWS" }] } },
+    "Timestamp": { date: {} }
+  }
+});
+
+await app.finalize();
+```
+
+## Deploy
+
+Run the script to sync your Notion workspace:
+
+::: code-group
+
+```sh [bun]
+bun ./alchemy.run.ts
+```
+
+```sh [npm]
+npx tsx ./alchemy.run.ts
+```
+
+:::

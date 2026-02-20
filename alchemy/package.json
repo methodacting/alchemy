@@ -297,6 +297,7 @@
     "@cloudflare/vite-plugin": "catalog:",
     "@coinbase/cdp-sdk": "^1.38.2",
     "@libsql/client": "^0.15.12",
+    "@notionhq/client": "^5.9.0",
     "@octokit/rest": "^21.1.1",
     "@sentry/cloudflare": "^9.43.0",
     "@sveltejs/adapter-cloudflare": "^7.1.2",
