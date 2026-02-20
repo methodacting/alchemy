@@ -88,13 +88,25 @@ export class DynadotApi {
     }
 
     const data = await response.json() as any;
-    // Dynadot response structure usually has a top-level property matching the resource
-    // or an 'error' property.
-    if (data.error) {
-      throw new Error(`Dynadot API Logic Error: ${data.error.message || "Unknown error"}`);
+    
+    // Dynadot V2 responses are wrapped in a {Command}Response object
+    const responseKey = Object.keys(data).find(k => k.endsWith("Response"));
+    if (!responseKey) {
+      if (data.error) {
+        throw new Error(`Dynadot API Logic Error: ${data.error.message || "Unknown error"}`);
+      }
+      return data as T;
     }
 
-    return data as T;
+    const commandResponse = data[responseKey];
+    const responseCode = commandResponse.ResponseCode?.toString();
+
+    // ResponseCode 0 is success
+    if (responseCode !== "0" && responseCode !== undefined) {
+      throw new Error(`Dynadot API Logic Error (${responseCode}): ${commandResponse.Error || "Unknown error"}`);
+    }
+
+    return commandResponse as T;
   }
 
   async get<T = any>(path: string): Promise<T> {

@@ -65,25 +65,25 @@ export const DNSRecord = Resource(
     const domainName = isDomain(props.domain) ? props.domain.domainName : props.domain;
     const host = props.host ?? "@";
 
+    // Dynadot doesn't have unique IDs for records in V2 API docs I saw, 
+    // it uses the set_dns approach. We'll use a virtual ID.
+    const recordId = `${host}/${props.type}`;
+
     if (this.phase === "delete") {
       if (this.output) {
         // Fetch current records, remove this one, and push back
-        const response = await api.get<{ dnsSettings: DynadotDNSSettings[] }>(`/domains/${domainName}/get_dns`);
-        const currentRecords = response.dnsSettings ?? [];
+        const response = await api.get<any>(`/domains/${domainName}/get_dns`);
+        const currentRecords: any[] = response.DnsSettings || [];
         const updatedRecords = currentRecords.filter(r => 
-          !(r.host === host && r.type === props.type && r.value === props.value)
+          !(r.Host === host && r.Type === props.type && r.Value === props.value)
         );
         
         await api.post(`/domains/${domainName}/set_dns`, {
-          dnsSettings: updatedRecords
+          DnsSettings: updatedRecords
         });
       }
       return this.destroy();
     }
-
-    // Dynadot doesn't have unique IDs for records in V2 API docs I saw, 
-    // it uses the set_dns approach. We'll use a virtual ID.
-    const recordId = `${host}/${props.type}`;
 
     if (this.phase === "update" && this.output) {
       if (this.output.host !== host || this.output.type !== props.type) {
@@ -92,20 +92,20 @@ export const DNSRecord = Resource(
     }
 
     // Fetch existing records
-    const response = await api.get<{ dnsSettings: DynadotDNSSettings[] }>(`/domains/${domainName}/get_dns`);
-    const currentRecords = response.dnsSettings ?? [];
+    const response = await api.get<any>(`/domains/${domainName}/get_dns`);
+    const currentRecords: any[] = response.DnsSettings || [];
 
-    const desiredRecord: DynadotDNSSettings = {
-      type: props.type,
-      host: host,
-      value: props.value,
-      ttl: props.ttl,
+    const desiredRecord: any = {
+      Type: props.type,
+      Host: host,
+      Value: props.value,
+      Ttl: props.ttl,
     };
 
     // Update or Add
-    const existingIndex = currentRecords.findIndex(r => r.host === host && r.type === props.type);
+    const existingIndex = currentRecords.findIndex(r => r.Host === host && r.Type === props.type);
     
-    let updatedRecords: DynadotDNSSettings[];
+    let updatedRecords: any[];
     if (existingIndex >= 0) {
       updatedRecords = [...currentRecords];
       updatedRecords[existingIndex] = desiredRecord;
@@ -114,7 +114,7 @@ export const DNSRecord = Resource(
     }
 
     await api.post(`/domains/${domainName}/set_dns`, {
-      dnsSettings: updatedRecords
+      DnsSettings: updatedRecords
     });
 
     return {

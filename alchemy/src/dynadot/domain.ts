@@ -48,6 +48,21 @@ export type Domain = Omit<DomainProps, "adopt" | "token" | "apiKey" | "apiSecret
 };
 
 /**
+ * Helper to map raw Dynadot API response to our internal details type
+ */
+function mapRawToDetails(raw: any): DynadotDomainDetails {
+  return {
+    domainName: raw.Name || raw.DomainName,
+    status: raw.Status,
+    expirationDate: raw.Expiration?.toString(),
+    creationDate: raw.Registration?.toString(),
+    autoRenew: raw.AutoRenew === "yes" ? "on" : "off",
+    whoisPrivacy: raw.WhoisPrivacy === "yes" ? "on" : "off",
+    nameservers: raw.NameServerSettings?.NameServers,
+  };
+}
+
+/**
  * Manages a Dynadot Domain registration and settings.
  *
  * @example
@@ -77,8 +92,10 @@ export const Domain = Resource(
     if (this.phase === "create" || !this.output) {
       // Check if domain is already in account
       try {
-        const response = await api.get<{ domainList: DynadotDomainDetails[] }>(`/domains/${domainName}`);
-        domainData = response.domainList?.[0];
+        const response = await api.get<{ DomainInfo: any }>(`/domains/${domainName}`);
+        if (response.DomainInfo) {
+          domainData = mapRawToDetails(response.DomainInfo);
+        }
       } catch (e) { /* ignore */ }
 
       if (domainData) {
@@ -87,14 +104,13 @@ export const Domain = Resource(
         }
       } else {
         // Register domain
-        await api.post("/domains/register", {
+        const response = await api.post<any>("/domains/register", {
           domainName,
           duration: props.duration ?? 1,
         });
-
-        // Fetch details after creation
-        const response = await api.get<{ domainList: DynadotDomainDetails[] }>(`/domains/${domainName}`);
-        domainData = response.domainList?.[0];
+        // Registration might return basic info, but we fetch full info next
+        const info = await api.get<{ DomainInfo: any }>(`/domains/${domainName}`);
+        domainData = mapRawToDetails(info.DomainInfo);
       }
     } else {
       // Use existing output state
@@ -132,7 +148,6 @@ export const Domain = Resource(
     }
 
     if (props.nameservers) {
-      // Dynadot V2 API might have a specific endpoint for NS
       await api.post(`/domains/${domainName}/set_ns`, {
         nameservers: props.nameservers
       });
