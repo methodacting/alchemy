@@ -12,7 +12,8 @@ export interface NotionApiOptions {
  * Creates a Notion client using the official SDK.
  */
 export function createNotionClient(options: NotionApiOptions = {}): Client {
-  // We unwrap secrets immediately or use env vars
+  const { Secret } = require("../secret.ts");
+  
   const token = (typeof options.token === "string" ? options.token : options.token?.unencrypted)
     ?? process.env.NOTION_TOKEN
     ?? "";
