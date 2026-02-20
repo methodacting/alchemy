@@ -88,7 +88,7 @@ export const Database = Resource(
 
       if (!databaseId || this.isReplacement) {
         const response = await notion.databases.create({
-          parent: { page_id: parentId },
+          parent: { type: "page_id", page_id: parentId },
           title: props.title,
           icon: props.icon,
           cover: props.cover,

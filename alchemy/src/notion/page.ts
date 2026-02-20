@@ -112,7 +112,7 @@ export const Page = Resource(
 
       if (!pageId || this.isReplacement) {
         const payload: any = {
-          parent: { [parentType]: parentId },
+          parent: { type: parentType, [parentType]: parentId },
           properties: props.properties,
           icon: props.icon,
           cover: props.cover,
