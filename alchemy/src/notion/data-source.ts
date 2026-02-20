@@ -1,3 +1,4 @@
+import type { CreateDatabaseParameters } from "@notionhq/client/build/src/api-endpoints";
 import type { Context } from "../context.ts";
 import { Resource, ResourceKind } from "../resource.ts";
 import { createNotionClient, type NotionApiOptions } from "./api.ts";
@@ -17,7 +18,7 @@ export interface DataSourceProps extends NotionApiOptions {
   /**
    * Property schema for the data source
    */
-  properties: any; // Using any due to SDK type resolution issues
+  properties: CreateDatabaseParameters["properties"];
 
   /**
    * Whether to adopt an existing data source by ID or title
