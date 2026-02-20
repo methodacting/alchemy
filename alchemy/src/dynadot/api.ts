@@ -1,5 +1,5 @@
 import { createHmac } from "node:crypto";
-import type { Secret } from "../secret.ts";
+import { Secret } from "../secret.ts";
 
 /**
  * Options for Dynadot API requests
@@ -46,7 +46,8 @@ export class DynadotApi {
   }
 
   /**
-   * Generate X-Signature header
+   * Generate X-Signature header using HMAC-SHA256
+   * The signature string format is: apiKey\nfullPath\n\nrequestBody
    */
   private generateSignature(path: string, body: string = ""): string {
     const signatureString = `${this.apiKey}\n${path}\n\n${body}`;
