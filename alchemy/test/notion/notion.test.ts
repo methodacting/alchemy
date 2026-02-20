@@ -3,7 +3,9 @@ process.env.ALCHEMY_PASSWORD = "test-password";
 import { alchemy } from "../../src/alchemy.ts";
 import { destroy } from "../../src/destroy.ts";
 import { Database } from "../../src/notion/database.ts";
+import { DataSource } from "../../src/notion/data-source.ts";
 import { Page } from "../../src/notion/page.ts";
+import { Block } from "../../src/notion/block.ts";
 import { createNotionClient } from "../../src/notion/api.ts";
 import { BRANCH_PREFIX } from "../util.ts";
 import "../../src/test/vitest.ts";
@@ -13,7 +15,7 @@ const test = alchemy.test(import.meta, {
 });
 
 describe("Notion", () => {
-  test("create page and database", async (scope) => {
+  test("create nested infrastructure hierarchy", async (scope) => {
     if (!process.env.NOTION_TOKEN || !process.env.NOTION_PARENT_PAGE_ID) {
       console.warn("Skipping Notion tests: NOTION_TOKEN or NOTION_PARENT_PAGE_ID not set");
       return;
@@ -24,47 +26,64 @@ describe("Notion", () => {
 
     try {
       // 1. Create Parent Page
-      const parentPage = await Page("root", {
+      const rootPage = await Page("root", {
         parent: process.env.NOTION_PARENT_PAGE_ID,
         properties: {
-          title: [{ text: { content: `${baseName} Documentation` } }]
+          title: [{ text: { content: `${baseName} Workspace` } }]
         }
       });
 
-      expect(parentPage.id).toBeDefined();
-      expect(parentPage.url).toBeDefined();
+      expect(rootPage.id).toBeDefined();
 
-      // 2. Create Database in Page
-      const db = await Database("logs", {
-        parent: parentPage,
-        title: [{ text: { content: "Deploy Logs" } }],
-        properties: {
-          "Name": { title: {} },
-          "Status": { select: { options: [{ name: "Success", color: "green" }, { name: "Failure", color: "red" }] } },
-          "Date": { date: {} }
-        }
+      // 2. Create Database Container
+      const db = await Database("hub", {
+        parent: rootPage,
+        title: [{ text: { content: "Resource Hub" } }]
       });
 
       expect(db.id).toBeDefined();
-      expect(db.parentId).toBe(parentPage.id);
 
-      // 3. Create Entry in Database
-      const entry = await Page("log-entry", {
-        parent: db,
+      // 3. Create Data Source (Table)
+      const source = await DataSource("logs-table", {
+        database: db,
+        title: "Deployment Logs",
         properties: {
-          "Name": { title: [{ text: { content: "Initial Deploy" } }] },
-          "Status": { select: { name: "Success" } },
-          "Date": { date: { start: new Date().toISOString() } }
+          "Name": { title: {} },
+          "Status": { select: { options: [{ name: "Success", color: "green" }] } }
+        }
+      });
+
+      expect(source.id).toBeDefined();
+      expect(source.databaseId).toBe(db.id);
+
+      // 4. Create Entry in Data Source
+      const entry = await Page("log-entry", {
+        parent: source,
+        properties: {
+          "Name": { title: [{ text: { content: "Manual Deploy" } }] },
+          "Status": { select: { name: "Success" } }
         }
       });
 
       expect(entry.id).toBeDefined();
-      expect(entry.parentId).toBe(db.id);
-      expect(entry.parentType).toBe("database_id");
+      expect(entry.parentType).toBe("data_source_id");
+
+      // 5. Add Content Block to the Page
+      const content = await Block("desc", {
+        parent: entry,
+        block: {
+          type: "paragraph",
+          paragraph: {
+            rich_text: [{ text: { content: "This deployment was verified by Alchemy." } }]
+          }
+        }
+      });
+
+      expect(content.id).toBeDefined();
 
       // Verify via SDK
-      const apiDb = await notion.databases.retrieve({ database_id: db.id });
-      expect(apiDb.properties["Status"]).toBeDefined();
+      const apiSource = await (notion as any).dataSources.retrieve({ data_source_id: source.id });
+      expect(apiSource.title).toBe("Deployment Logs");
 
     } finally {
       await destroy(scope);

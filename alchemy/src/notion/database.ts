@@ -1,8 +1,7 @@
 import type {
   CreateDatabaseParameters,
-  UpdateDatabaseParameters,
 } from "@notionhq/client/build/src/api-endpoints";
-import { Context } from "../context.ts";
+import type { Context } from "../context.ts";
 import { Resource, ResourceKind } from "../resource.ts";
 import { createNotionClient, type NotionApiOptions } from "./api.ts";
 import { isPage, type Page } from "./page.ts";
@@ -14,14 +13,19 @@ export interface DatabaseProps extends NotionApiOptions {
   parent: string | Page;
 
   /**
-   * Title of the database
+   * Title of the database container
    */
   title: CreateDatabaseParameters["title"];
 
   /**
-   * Property schema for the database
+   * Optional icon for the database
    */
-  properties: CreateDatabaseParameters["properties"];
+  icon?: CreateDatabaseParameters["icon"];
+
+  /**
+   * Optional cover for the database
+   */
+  cover?: CreateDatabaseParameters["cover"];
 
   /**
    * Whether to adopt an existing database by ID
@@ -38,16 +42,14 @@ export type Database = Omit<DatabaseProps, "adopt" | "token" | "parent"> & {
 };
 
 /**
- * Creates a Notion Database.
+ * Creates a Notion Database Container.
+ * In the 2025-09-03 API, a Database is an organizational container
+ * that can house multiple Data Sources.
  *
  * @example
- * const db = await Database("tasks", {
+ * const db = await Database("project-hub", {
  *   parent: "PAGE_ID",
- *   title: [{ text: { content: "My Tasks" } }],
- *   properties: {
- *     "Name": { title: {} },
- *     "Status": { select: { options: [{ name: "Todo" }, { name: "Done" }] } }
- *   }
+ *   title: [{ text: { content: "Project Hub" } }]
  * });
  */
 export const Database = Resource(
@@ -63,7 +65,6 @@ export const Database = Resource(
     if (this.phase === "delete") {
       if (this.output?.id) {
         try {
-          // In Notion, you "delete" a database by archiving its block
           await notion.blocks.delete({ block_id: this.output.id });
         } catch (error: any) {
           if (!error.message?.includes("404") && !error.status?.toString().includes("404")) {
@@ -79,41 +80,39 @@ export const Database = Resource(
 
     if (this.phase === "create" || !databaseId) {
       if (props.adopt && !this.isReplacement) {
-        // Notion IDs are usually passed directly as the resource ID or in props
         try {
           databaseData = await notion.databases.retrieve({ database_id: id });
           databaseId = databaseData.id;
-        } catch (e) {
-           // If id isn't a valid database id, we might need a search fallback
-           // but Notion search is fuzzy. For now, we assume ID is provided for adoption.
-        }
+        } catch (e) { /* ignore */ }
       }
 
       if (!databaseId || this.isReplacement) {
         const response = await notion.databases.create({
           parent: { page_id: parentId },
           title: props.title,
-          properties: props.properties,
-        } as CreateDatabaseParameters);
+          icon: props.icon,
+          cover: props.cover,
+        } as any); // Type cast due to possible SDK version lag
         databaseData = response;
         databaseId = databaseData.id;
       }
     } else {
-      // Update mutable properties (title, properties)
-      // Note: properties update in Notion is additive/modifying
+      // Update mutable properties (title, icon, cover)
       const response = await notion.databases.update({
         database_id: databaseId,
         title: props.title,
-        properties: props.properties as UpdateDatabaseParameters["properties"],
-      });
+        icon: props.icon,
+        cover: props.cover,
+      } as any);
       databaseData = response;
     }
 
     return {
-      id: databaseId,
+      id: databaseId as string,
       parentId,
       title: props.title,
-      properties: props.properties,
+      icon: props.icon,
+      cover: props.cover,
       url: databaseData.url,
       type: "notion::Database",
     };

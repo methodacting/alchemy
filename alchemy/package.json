@@ -224,6 +224,7 @@
     "astro": "^5.13.2",
     "rwsdk": "^1.0.0-beta.51",
     "stripe": "^18.5.0",
+    "@notionhq/client": "^5.9.0",
     "vite": ">=6.0.0",
     "wrangler": "catalog:"
   },

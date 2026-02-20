@@ -2,16 +2,17 @@ import type {
   CreatePageParameters,
   UpdatePageParameters,
 } from "@notionhq/client/build/src/api-endpoints";
-import { Context } from "../context.ts";
+import type { Context } from "../context.ts";
 import { Resource, ResourceKind } from "../resource.ts";
 import { createNotionClient, type NotionApiOptions } from "./api.ts";
 import { isDatabase, type Database } from "./database.ts";
+import { isDataSource, type DataSource } from "./data-source.ts";
 
 export interface PageProps extends NotionApiOptions {
   /**
-   * The parent container (Page or Database)
+   * The parent container (Page, Database, or Data Source)
    */
-  parent: string | Page | Database;
+  parent: string | Page | Database | DataSource;
 
   /**
    * Properties for the page
@@ -43,7 +44,7 @@ export interface PageProps extends NotionApiOptions {
 export type Page = Omit<PageProps, "adopt" | "token" | "parent"> & {
   id: string;
   parentId: string;
-  parentType: "page_id" | "database_id";
+  parentType: "page_id" | "database_id" | "data_source_id";
   url: string;
   type: "notion::Page";
 };
@@ -69,19 +70,19 @@ export const Page = Resource(
     const notion = createNotionClient(props);
     
     let parentId: string;
-    let parentType: "page_id" | "database_id";
+    let parentType: "page_id" | "database_id" | "data_source_id";
 
-    if (isDatabase(props.parent)) {
+    if (isDataSource(props.parent)) {
       parentId = props.parent.id;
-      parentType = "database_id";
+      parentType = "data_source_id";
+    } else if (isDatabase(props.parent)) {
+      parentId = props.parent.id;
+      parentType = "database_id"; // Deprecated but still works? Better use Data Source.
     } else if (isPage(props.parent)) {
       parentId = props.parent.id;
       parentType = "page_id";
     } else {
       parentId = props.parent.toString();
-      // Heuristic: determine if it's a database or page id?
-      // Notion IDs are opaque. We'll default to page_id unless we can verify.
-      // Better: let the user specify or try to retrieve.
       parentType = "page_id"; 
     }
 

@@ -23,5 +23,6 @@ export function createNotionClient(options: NotionApiOptions = {}): Client {
 
   return new Client({
     auth: token,
+    notionVersion: "2025-09-03",
   });
 }
