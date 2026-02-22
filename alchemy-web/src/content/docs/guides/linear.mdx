@@ -1,0 +1,80 @@
+---
+order: 80
+title: Linear
+description: Learn how to manage your Linear workspace, teams, and projects using Alchemy.
+---
+
+# Getting Started with Linear
+
+Linear is the standard for modern product management. Alchemy allows you to manage your teams, projects, and workflow settings programmatically, ensuring your operational tools stay in sync with your infrastructure.
+
+## Prerequisites
+
+1.  A **Linear** account.
+2.  A **Personal API Key**.
+
+### Generating an API Key
+
+1.  Log in to [Linear](https://linear.app/).
+2.  Navigate to **Settings** > **Account** > **API**.
+3.  Click **Create New Key** and give it a name (e.g., "Alchemy").
+4.  Copy your key immediately.
+
+Store the key in your environment:
+
+```sh
+export LINEAR_API_KEY="lin_api_..."
+```
+
+## Operations as Code
+
+Create an `alchemy.run.ts` file to bootstrap your workspace:
+
+```ts
+import { alchemy } from "alchemy";
+import { Team, Project, Label } from "alchemy/linear";
+
+const app = await alchemy("my-product-ops");
+
+// 1. Define your core team
+const eng = await Team("engineering", {
+  name: "Engineering",
+  key: "ENG"
+});
+
+// 2. Create a project for the next milestone
+await Project("v1-launch", {
+  name: "V1 Launch",
+  teams: [eng],
+  description: "Public beta release"
+});
+
+// 3. Standardize your labels
+await Label("bug", { name: "Bug", color: "#eb5757", team: eng });
+await Label("feat", { name: "Feature", color: "#3498db", team: eng });
+
+await app.finalize();
+```
+
+## Deploy
+
+Run the script to provision your Linear structure:
+
+::: code-group
+
+```sh [bun]
+bun ./alchemy.run.ts
+```
+
+```sh [npm]
+npx tsx ./alchemy.run.ts
+```
+
+:::
+
+## Key Benefits
+
+Managing Linear via Alchemy provides several advantages:
+*   **Consistency**: Ensure every new product team has the same labels and project structures.
+*   **Integration**: Automatically link Linear webhooks to your alerting infrastructure.
+*   **Documentation**: Your team structure and goals are documented directly in your codebase.
