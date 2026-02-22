@@ -45,31 +45,32 @@ describe("Porkbun Domain", () => {
       domain = await Domain("main", {
         domain: domainName,
         adopt: true,
-        autoRenew: !initialAutoRenew
+        autoRenew: !initialAutoRenew,
       });
 
       expect(domain.autoRenew).toBe(!initialAutoRenew);
 
       // Verify via API
       const { domains } = await api.post<{ domains: any[] }>("/domain/listAll");
-      const apiDomain = domains.find(d => d.domain === domainName);
-      expect(apiDomain.autoRenew.toString()).toBe(!initialAutoRenew ? "1" : "0");
+      const apiDomain = domains.find((d) => d.domain === domainName);
+      expect(apiDomain.autoRenew.toString()).toBe(
+        !initialAutoRenew ? "1" : "0",
+      );
 
       // 3. Revert change
       domain = await Domain("main", {
         domain: domainName,
         adopt: true,
-        autoRenew: initialAutoRenew
+        autoRenew: initialAutoRenew,
       });
       expect(domain.autoRenew).toBe(initialAutoRenew);
-
     } finally {
       // 4. Destroy (should be NOOP for domain registration)
       await destroy(scope);
-      
+
       // Verify domain still exists in account
       const { domains } = await api.post<{ domains: any[] }>("/domain/listAll");
-      const apiDomain = domains.find(d => d.domain === domainName);
+      const apiDomain = domains.find((d) => d.domain === domainName);
       expect(apiDomain).toBeDefined();
     }
   }, 120000);

@@ -44,7 +44,10 @@ export interface DomainProps extends PorkbunApiOptions {
   adopt?: boolean;
 }
 
-export type Domain = Omit<DomainProps, "adopt" | "token" | "apiKey" | "secretApiKey" | "agreeToTerms"> & {
+export type Domain = Omit<
+  DomainProps,
+  "adopt" | "token" | "apiKey" | "secretApiKey" | "agreeToTerms"
+> & {
   id: string;
   status: string;
   expireDate: string;
@@ -67,7 +70,7 @@ export const Domain = Resource(
   async function (
     this: Context<Domain>,
     id: string,
-    props: DomainProps
+    props: DomainProps,
   ): Promise<Domain> {
     const api = createPorkbunApi(props);
     const domainName = props.domain;
@@ -82,27 +85,43 @@ export const Domain = Resource(
     if (this.phase === "create" || !this.output) {
       // Check if domain is already in account
       try {
-        const { domains } = await api.post<{ domains: PorkbunDomainDetails[] }>("/domain/listAll");
-        domainData = domains.find(d => d.domain === domainName);
-      } catch (e) { /* ignore */ }
+        const { domains } = await api.post<{ domains: PorkbunDomainDetails[] }>(
+          "/domain/listAll",
+        );
+        domainData = domains.find((d) => d.domain === domainName);
+      } catch (e) {
+        /* ignore */
+      }
 
       if (domainData) {
         if (!props.adopt && !this.isReplacement) {
-          throw new Error(`Domain "${domainName}" already exists in your Porkbun account. Use adopt: true to manage it.`);
+          throw new Error(
+            `Domain "${domainName}" already exists in your Porkbun account. Use adopt: true to manage it.`,
+          );
         }
       } else {
         // Register domain
         if (!props.agreeToTerms) {
-          throw new Error(`agreeToTerms must be true to register domain "${domainName}"`);
+          throw new Error(
+            `agreeToTerms must be true to register domain "${domainName}"`,
+          );
         }
 
         // Check pricing first
-        const { pricing } = await api.post<{ pricing: Record<string, any> }>("/pricing/get");
+        const { pricing } = await api.post<{ pricing: Record<string, any> }>(
+          "/pricing/get",
+        );
         const tld = domainName.split(".").pop()!;
         const cost = pricing[tld]?.registration;
-        
-        if (props.maxCost !== undefined && cost && parseFloat(cost) > props.maxCost) {
-          throw new Error(`Registration cost for "${domainName}" ($${cost}) exceeds maxCost ($${props.maxCost})`);
+
+        if (
+          props.maxCost !== undefined &&
+          cost &&
+          parseFloat(cost) > props.maxCost
+        ) {
+          throw new Error(
+            `Registration cost for "${domainName}" ($${cost}) exceeds maxCost ($${props.maxCost})`,
+          );
         }
 
         // Convert cost to pennies for API
@@ -110,12 +129,14 @@ export const Domain = Resource(
 
         await api.post(`/domain/create/${domainName}`, {
           cost: costPennies,
-          agreeToTerms: "yes"
+          agreeToTerms: "yes",
         });
 
         // Fetch details after creation
-        const { domains } = await api.post<{ domains: PorkbunDomainDetails[] }>("/domain/listAll");
-        domainData = domains.find(d => d.domain === domainName);
+        const { domains } = await api.post<{ domains: PorkbunDomainDetails[] }>(
+          "/domain/listAll",
+        );
+        domainData = domains.find((d) => d.domain === domainName);
       }
     } else {
       // Update mutable properties
@@ -138,16 +159,20 @@ export const Domain = Resource(
       const currentAutoRenew = domainData.autoRenew === "1";
       if (currentAutoRenew !== props.autoRenew) {
         await api.post(`/domain/updateAutoRenew/${domainName}`, {
-          status: props.autoRenew ? "on" : "off"
+          status: props.autoRenew ? "on" : "off",
         });
       }
     }
 
     if (props.nameservers) {
-      const { ns } = await api.post<{ ns: string[] }>(`/domain/getNs/${domainName}`);
-      if (JSON.stringify(ns.sort()) !== JSON.stringify(props.nameservers.sort())) {
+      const { ns } = await api.post<{ ns: string[] }>(
+        `/domain/getNs/${domainName}`,
+      );
+      if (
+        JSON.stringify(ns.sort()) !== JSON.stringify(props.nameservers.sort())
+      ) {
         await api.post(`/domain/updateNs/${domainName}`, {
-          ns: props.nameservers
+          ns: props.nameservers,
         });
       }
     }
@@ -155,15 +180,16 @@ export const Domain = Resource(
     return {
       id: domainName,
       domain: domainName,
-      autoRenew: props.autoRenew ?? (domainData.autoRenew.toString() === "1"),
-      whoisPrivacy: props.whoisPrivacy ?? (domainData.whoisPrivacy.toString() === "1"),
+      autoRenew: props.autoRenew ?? domainData.autoRenew.toString() === "1",
+      whoisPrivacy:
+        props.whoisPrivacy ?? domainData.whoisPrivacy.toString() === "1",
       nameservers: props.nameservers,
       status: domainData.status,
       expireDate: domainData.expireDate,
       createDate: domainData.createDate,
       type: "porkbun::Domain",
     };
-  }
+  },
 );
 
 /**

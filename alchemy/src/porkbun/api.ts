@@ -25,16 +25,17 @@ export class PorkbunApi {
 
   constructor(options: PorkbunApiOptions = {}) {
     // We unwrap secrets immediately or use env vars
-    this.apiKey = (typeof options.apiKey === "string" ? options.apiKey : options.apiKey?.unencrypted) 
-      ?? process.env.PORKBUN_API_KEY 
-      ?? "";
-    
-    this.secretApiKey = (typeof options.secretApiKey === "string" ? options.secretApiKey : options.secretApiKey?.unencrypted)
-      ?? process.env.PORKBUN_SECRET_API_KEY
-      ?? "";
+    this.apiKey = Secret.unwrap(
+      options.apiKey ?? process.env.PORKBUN_API_KEY ?? "",
+    );
+    this.secretApiKey = Secret.unwrap(
+      options.secretApiKey ?? process.env.PORKBUN_SECRET_API_KEY ?? "",
+    );
 
     if (!this.apiKey || !this.secretApiKey) {
-      throw new Error("PORKBUN_API_KEY and PORKBUN_SECRET_API_KEY environment variables are required");
+      throw new Error(
+        "PORKBUN_API_KEY and PORKBUN_SECRET_API_KEY environment variables are required",
+      );
     }
   }
 
@@ -64,12 +65,16 @@ export class PorkbunApi {
       } catch {
         errorData = { message: await response.text() };
       }
-      throw new Error(`Porkbun API Error (${response.status}): ${errorData.message || JSON.stringify(errorData)}`);
+      throw new Error(
+        `Porkbun API Error (${response.status}): ${errorData.message || JSON.stringify(errorData)}`,
+      );
     }
 
-    const data = await response.json() as any;
+    const data = (await response.json()) as any;
     if (data.status === "ERROR") {
-      throw new Error(`Porkbun API Logic Error: ${data.message || "Unknown error"}`);
+      throw new Error(
+        `Porkbun API Logic Error: ${data.message || "Unknown error"}`,
+      );
     }
 
     return data as T;

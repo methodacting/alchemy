@@ -42,7 +42,7 @@ describe("Porkbun DNS", () => {
         name: subdomain,
         type: "A",
         content: "1.2.3.4",
-        ttl: 600
+        ttl: 600,
       });
 
       expect(record.id).toBeDefined();
@@ -55,28 +55,31 @@ describe("Porkbun DNS", () => {
         name: subdomain,
         type: "A",
         content: "5.6.7.8",
-        ttl: 600
+        ttl: 600,
       });
 
       expect(record.content).toBe("5.6.7.8");
 
       // Verify via API
-      const { records } = await api.post<{ records: any[] }>(`/dns/retrieve/${domainName}/${record.id}`);
+      const { records } = await api.post<{ records: any[] }>(
+        `/dns/retrieve/${domainName}/${record.id}`,
+      );
       expect(records[0].content).toBe("5.6.7.8");
-
     } finally {
       await destroy(scope);
-      
+
       // Verify deletion
       if (record?.id) {
         try {
-          const response = await api.post<{ records: any[] }>(`/dns/retrieve/${domainName}/${record.id}`);
+          const response = await api.post<{ records: any[] }>(
+            `/dns/retrieve/${domainName}/${record.id}`,
+          );
           // If it doesn't throw, check if records is empty or first item is different
           if (response.records && response.records.length > 0) {
-             // In some cases Porkbun might return status ERROR for non-existent ID
+            // In some cases Porkbun might return status ERROR for non-existent ID
           }
         } catch (e: any) {
-           expect(e.message).toContain("Logic Error");
+          expect(e.message).toContain("Logic Error");
         }
       }
     }

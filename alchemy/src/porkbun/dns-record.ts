@@ -42,12 +42,29 @@ export interface DNSRecordProps extends PorkbunApiOptions {
   adopt?: boolean;
 }
 
-export type DNSRecord = Omit<DNSRecordProps, "adopt" | "token" | "apiKey" | "secretApiKey" | "domain" | "type"> & {
+export type DNSRecord = Omit<
+  DNSRecordProps,
+  "adopt" | "token" | "apiKey" | "secretApiKey" | "domain" | "type"
+> & {
   id: string;
   domain: string;
   dnsType: string;
   type: "porkbun::DNSRecord";
 };
+
+type DNSRecordPropsNormalized = Omit<DNSRecordProps, "domain"> & {
+  domain: string;
+};
+
+export function DNSRecord(
+  id: string,
+  props: DNSRecordProps,
+): Promise<DNSRecord> {
+  return _DNSRecord(id, {
+    ...props,
+    domain: isDomain(props.domain) ? props.domain.domain : props.domain,
+  });
+}
 
 /**
  * Creates a Porkbun DNS Record.
@@ -60,15 +77,15 @@ export type DNSRecord = Omit<DNSRecordProps, "adopt" | "token" | "apiKey" | "sec
  *   content: "1.2.3.4"
  * });
  */
-export const DNSRecord = Resource(
+const _DNSRecord = Resource(
   "porkbun::DNSRecord",
   async function (
     this: Context<DNSRecord>,
     id: string,
-    props: DNSRecordProps
+    props: DNSRecordPropsNormalized,
   ): Promise<DNSRecord> {
     const api = createPorkbunApi(props);
-    const domainName = isDomain(props.domain) ? props.domain.domain : props.domain;
+    const domainName = props.domain;
     const subdomain = props.name === "@" ? "" : (props.name ?? "");
 
     if (this.phase === "delete") {
@@ -85,7 +102,10 @@ export const DNSRecord = Resource(
     }
 
     if (this.phase === "update" && this.output) {
-      if (this.output.name !== (props.name ?? "") || this.output.dnsType !== props.type) {
+      if (
+        this.output.name !== (props.name ?? "") ||
+        this.output.dnsType !== props.type
+      ) {
         return this.replace(true);
       }
     }
@@ -96,16 +116,22 @@ export const DNSRecord = Resource(
     if (this.phase === "create" || !recordId) {
       if (props.adopt && !this.isReplacement) {
         try {
-          const { records } = await api.post<{ records: PorkbunDNSRecord[] }>(`/dns/retrieve/${domainName}`);
-          recordData = records.find(r => 
-            r.name === (subdomain ? `${subdomain}.${domainName}` : domainName) && 
-            r.type === props.type &&
-            r.content === props.content
+          const { records } = await api.post<{ records: PorkbunDNSRecord[] }>(
+            `/dns/retrieve/${domainName}`,
+          );
+          recordData = records.find(
+            (r) =>
+              r.name ===
+                (subdomain ? `${subdomain}.${domainName}` : domainName) &&
+              r.type === props.type &&
+              r.content === props.content,
           );
           if (recordData) {
             recordId = recordData.id;
           }
-        } catch (e) { /* ignore */ }
+        } catch (e) {
+          /* ignore */
+        }
       }
 
       if (!recordId || this.isReplacement) {
@@ -117,7 +143,7 @@ export const DNSRecord = Resource(
             content: props.content,
             ttl: props.ttl?.toString(),
             prio: props.prio?.toString(),
-          }
+          },
         );
         recordId = response.id;
       }
@@ -139,11 +165,15 @@ export const DNSRecord = Resource(
     }
 
     // Fetch final state
-    const { records } = await api.post<{ records: PorkbunDNSRecord[] }>(`/dns/retrieve/${domainName}/${recordId}`);
+    const { records } = await api.post<{ records: PorkbunDNSRecord[] }>(
+      `/dns/retrieve/${domainName}/${recordId}`,
+    );
     recordData = records[0];
 
     if (!recordData) {
-      throw new Error(`Failed to retrieve record ${recordId} for domain ${domainName}`);
+      throw new Error(
+        `Failed to retrieve record ${recordId} for domain ${domainName}`,
+      );
     }
 
     return {
@@ -156,7 +186,7 @@ export const DNSRecord = Resource(
       prio: recordData.prio ? parseInt(recordData.prio) : undefined,
       type: "porkbun::DNSRecord",
     };
-  }
+  },
 );
 
 /**
