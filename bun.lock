@@ -81,6 +81,7 @@
         "@cloudflare/vite-plugin": "catalog:",
         "@coinbase/cdp-sdk": "^1.38.2",
         "@libsql/client": "^0.15.12",
+        "@notionhq/client": "^5.9.0",
         "@octokit/rest": "^21.1.1",
         "@sentry/cloudflare": "^9.43.0",
         "@sveltejs/adapter-cloudflare": "^7.1.2",
@@ -820,6 +821,7 @@
     "@cloudflare/containers": "^0.0.30",
     "@cloudflare/vite-plugin": "^1.21.2",
     "@cloudflare/workers-types": "^4.20260124.0",
+    "@notionhq/client": "^2.2.15",
     "typescript": "^5.8.3",
     "vite": "^7.1.9",
     "wrangler": "^4.65.0",
@@ -1566,6 +1568,8 @@
     "@nodelib/fs.walk": ["@nodelib/fs.walk@1.2.8", "", { "dependencies": { "@nodelib/fs.scandir": "2.1.5", "fastq": "^1.6.0" } }, "sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg=="],
 
     "@nolyfill/is-core-module": ["@nolyfill/is-core-module@1.0.39", "", {}, "sha512-nn5ozdjYQpUCZlWGuxcJY/KpxkWQs4DcbMCmKojjyrYDEAGy4Ce19NN4v5MduafTwJlbKc99UA8YhSVqq9yPZA=="],
+
+    "@notionhq/client": ["@notionhq/client@5.9.0", "", {}, "sha512-TvAVMfwtVv61hsPrRfB9ehgzSjX6DaAi1ZRAnpg8xFjzaXhzhEfbO0PhBRm3ecSv1azDuO2kBuyQHh2/z7G4YQ=="],
 
     "@npmcli/git": ["@npmcli/git@4.1.0", "", { "dependencies": { "@npmcli/promise-spawn": "^6.0.0", "lru-cache": "^7.4.4", "npm-pick-manifest": "^8.0.0", "proc-log": "^3.0.0", "promise-inflight": "^1.0.1", "promise-retry": "^2.0.1", "semver": "^7.3.5", "which": "^3.0.0" } }, "sha512-9hwoB3gStVfa0N31ymBmrX+GuDGdVA/QWShZVqE0HK2Af+7QGGrCTbZia/SW0ImUTjTne7SP91qxDmtXvDHRPQ=="],
 
