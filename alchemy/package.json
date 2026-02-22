@@ -123,6 +123,10 @@
       "bun": "./src/github/index.ts",
       "import": "./lib/github/index.js"
     },
+    "./porkbun": {
+      "bun": "./src/porkbun/index.ts",
+      "import": "./lib/porkbun/index.js"
+    },
     "./neon": {
       "bun": "./src/neon/index.ts",
       "import": "./lib/neon/index.js"
