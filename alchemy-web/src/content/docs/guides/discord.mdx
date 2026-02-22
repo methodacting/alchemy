@@ -1,0 +1,86 @@
+---
+order: 40
+title: Discord
+description: Learn how to manage Discord servers, channels, and webhooks using Alchemy.
+---
+
+# Getting Started with Discord
+
+Alchemy allows you to manage the infrastructure of your community or operations center as code using the Discord REST API.
+
+## Prerequisites
+
+1.  A **Discord** account.
+2.  A **Discord Bot Token**.
+
+### Creating a Discord Bot
+
+1.  Go to the [Discord Developer Portal](https://discord.com/developers/applications).
+2.  Click **New Application** and give it a name.
+3.  Navigate to the **Bot** tab and click **Reset Token** to get your token.
+4.  Ensure you enable the **Manage Guild** and **Manage Channels** permissions for the bot.
+5.  Invite the bot to your server using the **OAuth2 URL Generator** (select the `bot` scope).
+
+Store the token in your environment:
+
+```sh
+export DISCORD_BOT_TOKEN="your-bot-token"
+```
+
+## Community as Code
+
+Create an `alchemy.run.ts` file to organize your server:
+
+```ts
+import { alchemy } from "alchemy";
+import { Guild, Channel, Webhook, DiscordChannelType } from "alchemy/discord";
+
+const app = await alchemy("my-community");
+
+// 1. Adopt your existing server
+const guild = await Guild("main", {
+  name: "Dev Ops",
+  adopt: true
+});
+
+// 2. Create an "Ops" category
+const ops = await Channel("ops-cat", {
+  guild,
+  name: "Operations",
+  type: DiscordChannelType.GuildCategory
+});
+
+// 3. Create a channel for cloud alerts
+const alerts = await Channel("cloud-alerts", {
+  guild,
+  name: "infra-alerts",
+  parentId: ops,
+  topic: "Notifications from Hetzner and AWS"
+});
+
+// 4. Create a webhook for your infrastructure to use
+const webhook = await Webhook("infra-bot", {
+  channel: alerts,
+  name: "Alchemy Monitor"
+});
+
+console.log(`Alerts Webhook: ${webhook.url}`);
+
+await app.finalize();
+```
+
+## Deploy
+
+Run the script to sync your Discord structure:
+
+::: code-group
+
+```sh [bun]
+bun ./alchemy.run.ts
+```
+
+```sh [npm]
+npx tsx ./alchemy.run.ts
+```
+
+:::
