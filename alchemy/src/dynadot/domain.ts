@@ -1,7 +1,7 @@
 import type { Context } from "../context.ts";
 import { Resource, ResourceKind } from "../resource.ts";
 import { createDynadotApi, type DynadotApiOptions } from "./api.ts";
-import type { DynadotDomainDetails } from "./types.ts";
+import type { DynadotDomainDetails, DynadotV3DomainInfo } from "./types.ts";
 
 export interface DomainProps extends DynadotApiOptions {
   /**
@@ -39,48 +39,60 @@ export interface DomainProps extends DynadotApiOptions {
   adopt?: boolean;
 }
 
-export type Domain = Omit<DomainProps, "adopt" | "token" | "apiKey" | "apiSecret"> & {
-  id: string;
-  status: string;
-  expirationDate: string;
-  creationDate: string;
-  type: "dynadot::Domain";
-};
+export type Domain = Omit<
+  DomainProps,
+  "adopt" | "token" | "apiKey" | "apiSecret"
+> &
+  Resource<"dynadot::Domain"> & {
+    id: string;
+    status: string;
+    expirationDate: string;
+    creationDate: string;
+    type: "dynadot::Domain";
+  };
+
+interface DomainInfoCommandResponse {
+  DomainInfo: DynadotV3DomainInfo;
+}
 
 /**
- * Helper to map raw Dynadot API response to our internal details type
+ * Helper to map raw Dynadot V3 API response to our internal details type
  */
-function mapRawToDetails(raw: any): DynadotDomainDetails {
+function mapRawToDetails(raw: DynadotV3DomainInfo): DynadotDomainDetails {
   return {
-    domainName: raw.Name || raw.DomainName,
+    domainName: raw.Name,
     status: raw.Status,
-    expirationDate: raw.Expiration?.toString(),
-    creationDate: raw.Registration?.toString(),
-    autoRenew: raw.AutoRenew === "yes" ? "on" : "off",
-    whoisPrivacy: raw.WhoisPrivacy === "yes" ? "on" : "off",
-    nameservers: raw.NameServerSettings?.NameServers,
+    expirationDate: raw.Expiration,
+    creationDate: raw.Registration,
+    autoRenew: raw.RenewOption === "auto" ? "on" : "off",
+    whoisPrivacy:
+      raw.Privacy === "full" || raw.Privacy === "partial" ? "on" : "off",
+    nameservers: raw.NameServerSettings?.NameServers?.map((ns) =>
+      typeof ns === "string" ? ns : (ns as { ServerName: string }).ServerName,
+    ),
   };
 }
 
 /**
  * Manages a Dynadot Domain registration and settings.
- *
- * @example
- * const domain = await Domain("main", {
- *   domainName: "example.com",
- *   adopt: true,
- *   autoRenew: true
- * });
  */
 export const Domain = Resource(
   "dynadot::Domain",
   async function (
     this: Context<Domain>,
-    id: string,
-    props: DomainProps
+    _id: string,
+    props: DomainProps,
   ): Promise<Domain> {
     const api = createDynadotApi(props);
     const domainName = props.domainName;
+
+    if (
+      this.phase === "update" &&
+      this.output &&
+      this.output.domainName !== domainName
+    ) {
+      return this.replace();
+    }
 
     // Deletion is a NOOP for domains
     if (this.phase === "delete") {
@@ -92,25 +104,49 @@ export const Domain = Resource(
     if (this.phase === "create" || !this.output) {
       // Check if domain is already in account
       try {
-        const response = await api.get<{ DomainInfo: any }>(`/domains/${domainName}`);
+        const response = await api.get<DomainInfoCommandResponse>(
+          "domain_info",
+          { domain: domainName },
+        );
         if (response.DomainInfo) {
           domainData = mapRawToDetails(response.DomainInfo);
         }
-      } catch (e) { /* ignore */ }
+      } catch (e) {
+        /* ignore */
+      }
 
       if (domainData) {
         if (!props.adopt && !this.isReplacement) {
-          throw new Error(`Domain "${domainName}" already exists in your Dynadot account. Use adopt: true to manage it.`);
+          throw new Error(
+            `Domain "${domainName}" already exists in your Dynadot account. Use adopt: true to manage it.`,
+          );
         }
       } else {
         // Register domain
-        const response = await api.post<any>("/domains/register", {
-          domainName,
+        await api.post<{}>("register", {
+          domain: domainName,
           duration: props.duration ?? 1,
+          currency: "USD",
         });
-        // Registration might return basic info, but we fetch full info next
-        const info = await api.get<{ DomainInfo: any }>(`/domains/${domainName}`);
-        domainData = mapRawToDetails(info.DomainInfo);
+
+        // Wait and fetch info (registration can take a few moments)
+        let attempts = 0;
+        while (attempts < 10) {
+          try {
+            const info = await api.get<DomainInfoCommandResponse>(
+              "domain_info",
+              { domain: domainName },
+            );
+            if (info.DomainInfo) {
+              domainData = mapRawToDetails(info.DomainInfo);
+              break;
+            }
+          } catch (e) {
+            if (attempts === 9) throw e;
+          }
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+          attempts++;
+        }
       }
     } else {
       // Use existing output state
@@ -132,8 +168,9 @@ export const Domain = Resource(
     if (props.autoRenew !== undefined) {
       const currentAutoRenew = domainData.autoRenew === "on";
       if (currentAutoRenew !== props.autoRenew) {
-        await api.post(`/domains/${domainName}/set_auto_renew`, {
-          status: props.autoRenew ? "on" : "off"
+        await api.post<{}>("set_renew_option", {
+          domain: domainName,
+          renew_option: props.autoRenew ? "auto" : "donot",
         });
       }
     }
@@ -141,35 +178,39 @@ export const Domain = Resource(
     if (props.whoisPrivacy !== undefined) {
       const currentPrivacy = domainData.whoisPrivacy === "on";
       if (currentPrivacy !== props.whoisPrivacy) {
-        await api.post(`/domains/${domainName}/set_privacy`, {
-          status: props.whoisPrivacy ? "on" : "off"
+        await api.post<{}>("set_privacy", {
+          domain: domainName,
+          option: props.whoisPrivacy ? "full" : "off",
+          whois_privacy_option: props.whoisPrivacy ? "yes" : "no",
         });
       }
     }
 
-    if (props.nameservers) {
-      await api.post(`/domains/${domainName}/set_ns`, {
-        nameservers: props.nameservers
+    if (props.nameservers && props.nameservers.length > 0) {
+      const nsParams: Record<string, string> = { domain: domainName };
+      props.nameservers.forEach((ns, index) => {
+        nsParams[`ns${index}`] = ns;
       });
+      await api.post<{}>("set_ns", nsParams);
     }
 
     return {
       id: domainName,
       domainName: domainName,
-      autoRenew: props.autoRenew ?? (domainData.autoRenew === "on"),
-      whoisPrivacy: props.whoisPrivacy ?? (domainData.whoisPrivacy === "on"),
+      autoRenew: props.autoRenew ?? domainData.autoRenew === "on",
+      whoisPrivacy: props.whoisPrivacy ?? domainData.whoisPrivacy === "on",
       nameservers: props.nameservers,
       status: domainData.status,
       expirationDate: domainData.expirationDate,
       creationDate: domainData.creationDate,
       type: "dynadot::Domain",
-    };
-  }
+    } as Domain;
+  },
 );
 
 /**
  * Type guard for Domain resource
  */
-export function isDomain(resource: any): resource is Domain {
-  return resource?.[ResourceKind] === "dynadot::Domain";
+export function isDomain(resource: unknown): resource is Domain {
+  return (resource as any)?.[ResourceKind] === "dynadot::Domain";
 }

@@ -1,5 +1,6 @@
-import { createHmac } from "node:crypto";
 import { Secret } from "../secret.ts";
+import { withExponentialBackoff } from "../util/retry.ts";
+import type { DynadotV3Header } from "./types.ts";
 
 /**
  * Options for Dynadot API requests
@@ -10,10 +11,6 @@ export interface DynadotApiOptions {
    */
   apiKey?: string | Secret;
   /**
-   * API Secret (overrides DYNADOT_API_SECRET env var)
-   */
-  apiSecret?: string | Secret;
-  /**
    * Whether to use the sandbox environment
    * @default DYNADOT_SANDBOX env var or false
    */
@@ -21,108 +18,112 @@ export interface DynadotApiOptions {
 }
 
 /**
- * API client for Dynadot RESTful API V2
+ * API client for Dynadot API V3 (api3.json)
  */
 export class DynadotApi {
   readonly baseUrl: string;
   readonly apiKey: string;
-  readonly apiSecret: string;
 
   constructor(options: DynadotApiOptions = {}) {
-    this.apiKey = (typeof options.apiKey === "string" ? options.apiKey : options.apiKey?.unencrypted)
-      ?? process.env.DYNADOT_API_KEY
-      ?? "";
-    
-    this.apiSecret = (typeof options.apiSecret === "string" ? options.apiSecret : options.apiSecret?.unencrypted)
-      ?? process.env.DYNADOT_API_SECRET
-      ?? "";
+    this.apiKey =
+      (typeof options.apiKey === "string"
+        ? options.apiKey
+        : options.apiKey?.unencrypted) ??
+      process.env.DYNADOT_API_KEY ??
+      "";
 
-    const useSandbox = options.sandbox ?? process.env.DYNADOT_SANDBOX === "true";
-    this.baseUrl = useSandbox ? "https://api-sandbox.dynadot.com" : "https://api.dynadot.com";
+    const useSandbox =
+      options.sandbox ?? process.env.DYNADOT_SANDBOX === "true";
+    this.baseUrl = useSandbox
+      ? "https://api-sandbox.dynadot.com/api3.json"
+      : "https://api.dynadot.com/api3.json";
 
-    if (!this.apiKey || !this.apiSecret) {
-      throw new Error("DYNADOT_API_KEY and DYNADOT_API_SECRET environment variables are required");
+    if (!this.apiKey) {
+      throw new Error("DYNADOT_API_KEY environment variable is required");
     }
-  }
-
-  /**
-   * Generate X-Signature header using HMAC-SHA256
-   * The signature string format is: apiKey\nfullPath\n\nrequestBody
-   */
-  private generateSignature(path: string, body: string = ""): string {
-    const signatureString = `${this.apiKey}\n${path}\n\n${body}`;
-    return createHmac("sha256", this.apiSecret)
-      .update(signatureString)
-      .digest("base64");
   }
 
   /**
    * Make a request to the Dynadot API
+   *
+   * Note: Dynadot only processes one request at a time per account. When the
+   * API returns error code -1 ("currently processing another request from this account"),
+   * we retry with exponential backoff.
    */
-  async request<T = any>(method: string, path: string, body?: any): Promise<T> {
-    const fullPath = `/restful/v2${path}`;
-    const stringBody = body ? JSON.stringify(body) : "";
-    const signature = this.generateSignature(fullPath, stringBody);
+  async request<T>(
+    command: string,
+    params: Record<string, string | number | boolean | undefined> = {},
+  ): Promise<T> {
+    return await withExponentialBackoff(
+      async () => {
+        const url = new URL(this.baseUrl);
+        url.searchParams.append("key", this.apiKey);
+        url.searchParams.append("command", command);
 
-    const headers: Record<string, string> = {
-      "Authorization": `Bearer ${this.apiKey}`,
-      "X-Signature": signature,
-      "Content-Type": "application/json",
-      "Accept": "application/json",
-    };
+        for (const [key, value] of Object.entries(params)) {
+          if (value !== undefined) {
+            url.searchParams.append(key, value.toString());
+          }
+        }
 
-    const response = await fetch(`${this.baseUrl}${fullPath}`, {
-      method,
-      headers,
-      body: body ? stringBody : undefined,
-    });
+        const response = await fetch(url.toString());
 
-    if (!response.ok) {
-      let errorData: any;
-      try {
-        errorData = await response.json();
-      } catch {
-        errorData = { message: await response.text() };
-      }
-      throw new Error(`Dynadot API Error (${response.status}): ${errorData.error?.message || errorData.message || JSON.stringify(errorData)}`);
-    }
+        if (!response.ok) {
+          throw new Error(
+            `Dynadot API HTTP Error (${response.status}): ${await response.text()}`,
+          );
+        }
 
-    const data = await response.json() as any;
-    
-    // Dynadot V2 responses are wrapped in a {Command}Response object
-    const responseKey = Object.keys(data).find(k => k.endsWith("Response"));
-    if (!responseKey) {
-      if (data.error) {
-        throw new Error(`Dynadot API Logic Error: ${data.error.message || "Unknown error"}`);
-      }
-      return data as T;
-    }
+        const data = (await response.json()) as Record<
+          string,
+          DynadotV3Header & T
+        >;
 
-    const commandResponse = data[responseKey];
-    const responseCode = commandResponse.ResponseCode?.toString();
+        // Dynadot V3 responses are wrapped in a {Command}Response object
+        const responseKey = Object.keys(data).find((k) =>
+          k.endsWith("Response"),
+        );
+        if (!responseKey) {
+          throw new Error(
+            `Dynadot API Unexpected Response Format: ${JSON.stringify(data)}`,
+          );
+        }
 
-    // ResponseCode 0 is success
-    if (responseCode !== "0" && responseCode !== undefined) {
-      throw new Error(`Dynadot API Logic Error (${responseCode}): ${commandResponse.Error || "Unknown error"}`);
-    }
+        const commandResponse = data[responseKey];
+        const responseCode =
+          commandResponse.ResponseCode?.toString() ??
+          (commandResponse as any).SuccessCode?.toString();
 
-    return commandResponse as T;
+        // ResponseCode 0 is success
+        if (responseCode !== "0" && responseCode !== undefined) {
+          const error = new Error(
+            `Dynadot API Error (${responseCode}): ${commandResponse.Error || "Unknown error"}`,
+          ) as Error & { code?: string };
+          error.code = responseCode;
+          throw error;
+        }
+
+        return commandResponse as T;
+      },
+      (error) => (error as { code?: string })?.code === "-1",
+      10,
+      500,
+      8000,
+    );
   }
 
-  async get<T = any>(path: string): Promise<T> {
-    return this.request<T>("GET", path);
+  async get<T>(
+    command: string,
+    params?: Record<string, string | number | boolean | undefined>,
+  ): Promise<T> {
+    return this.request<T>(command, params);
   }
 
-  async post<T = any>(path: string, body: any = {}): Promise<T> {
-    return this.request<T>("POST", path, body);
-  }
-
-  async put<T = any>(path: string, body: any = {}): Promise<T> {
-    return this.request<T>("PUT", path, body);
-  }
-
-  async delete<T = any>(path: string): Promise<T> {
-    return this.request<T>("DELETE", path);
+  async post<T>(
+    command: string,
+    params?: Record<string, string | number | boolean | undefined>,
+  ): Promise<T> {
+    return this.request<T>(command, params);
   }
 }
 
