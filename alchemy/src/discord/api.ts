@@ -16,11 +16,15 @@ export interface DiscordApiOptions {
 export class DiscordApi {
   readonly baseUrl: string = "https://discord.com/api/v10";
   readonly botToken: string;
+  private _applicationId?: string;
 
   constructor(options: DiscordApiOptions = {}) {
-    this.botToken = (typeof options.botToken === "string" ? options.botToken : options.botToken?.unencrypted)
-      ?? process.env.DISCORD_BOT_TOKEN
-      ?? "";
+    this.botToken =
+      (typeof options.botToken === "string"
+        ? options.botToken
+        : options.botToken?.unencrypted) ??
+      process.env.DISCORD_BOT_TOKEN ??
+      "";
 
     if (!this.botToken) {
       throw new Error("DISCORD_BOT_TOKEN environment variable is required");
@@ -28,14 +32,27 @@ export class DiscordApi {
   }
 
   /**
+   * Get the application ID for the bot
+   */
+  async getApplicationId(): Promise<string> {
+    if (this._applicationId) return this._applicationId;
+    const response = await this.get<{ id: string }>("/users/@me");
+    this._applicationId = response.id;
+    return this._applicationId;
+  }
+
+  /**
    * Make a request to the Discord API
    */
-  async request<T = any>(method: string, path: string, body?: any): Promise<T> {
+  async request<T>(method: string, path: string, body?: unknown): Promise<T> {
     const headers: Record<string, string> = {
-      "Authorization": `Bot ${this.botToken}`,
-      "Content-Type": "application/json",
+      Authorization: `Bot ${this.botToken}`,
       "User-Agent": "Alchemy (https://github.com/alchemy-run/alchemy)",
     };
+
+    if (body) {
+      headers["Content-Type"] = "application/json";
+    }
 
     const response = await fetch(`${this.baseUrl}${path}`, {
       method,
@@ -49,40 +66,103 @@ export class DiscordApi {
         throw new Error(`Discord API Rate Limited. Retry after ${retryAfter}s`);
       }
 
-      let errorData: any;
+      let errorData: { message?: string } | string;
       try {
-        errorData = await response.json();
+        errorData = (await response.json()) as { message?: string };
+        console.error(
+          "Discord API Error Body:",
+          JSON.stringify(errorData, null, 2),
+        );
       } catch {
-        errorData = { message: await response.text() };
+        errorData = await response.text();
+        console.error("Discord API Error Body (Text):", errorData);
       }
-      throw new Error(`Discord API Error (${response.status}): ${errorData.message || JSON.stringify(errorData)}`);
+      const message =
+        typeof errorData === "string"
+          ? errorData
+          : errorData.message || JSON.stringify(errorData);
+      throw new Error(`Discord API Error (${response.status}): ${message}`);
     }
 
     if (response.status === 204) {
       return {} as T;
     }
 
-    return await response.json() as T;
+    return (await response.json()) as T;
   }
 
-  async get<T = any>(path: string): Promise<T> {
+  async get<T>(path: string): Promise<T> {
     return this.request<T>("GET", path);
   }
 
-  async post<T = any>(path: string, body: any = {}): Promise<T> {
+  async post<T>(path: string, body: unknown = {}): Promise<T> {
     return this.request<T>("POST", path, body);
   }
 
-  async patch<T = any>(path: string, body: any = {}): Promise<T> {
+  async postForm<T>(path: string, form: FormData): Promise<T> {
+    return this.requestForm<T>("POST", path, form);
+  }
+
+  async patch<T>(path: string, body: unknown = {}): Promise<T> {
     return this.request<T>("PATCH", path, body);
   }
 
-  async put<T = any>(path: string, body: any = {}): Promise<T> {
+  async put<T>(path: string, body: unknown = {}): Promise<T> {
     return this.request<T>("PUT", path, body);
   }
 
-  async delete<T = any>(path: string): Promise<T> {
+  async delete<T>(path: string): Promise<T> {
     return this.request<T>("DELETE", path);
+  }
+
+  /**
+   * Make a multipart/form-data request to the Discord API
+   */
+  async requestForm<T>(
+    method: string,
+    path: string,
+    form: FormData,
+  ): Promise<T> {
+    const headers: Record<string, string> = {
+      Authorization: `Bot ${this.botToken}`,
+      "User-Agent": "Alchemy (https://github.com/alchemy-run/alchemy)",
+    };
+
+    const response = await fetch(`${this.baseUrl}${path}`, {
+      method,
+      headers,
+      body: form,
+    });
+
+    if (!response.ok) {
+      if (response.status === 429) {
+        const retryAfter = response.headers.get("Retry-After");
+        throw new Error(`Discord API Rate Limited. Retry after ${retryAfter}s`);
+      }
+
+      let errorData: { message?: string } | string;
+      try {
+        errorData = (await response.json()) as { message?: string };
+        console.error(
+          "Discord API Error Body:",
+          JSON.stringify(errorData, null, 2),
+        );
+      } catch {
+        errorData = await response.text();
+        console.error("Discord API Error Body (Text):", errorData);
+      }
+      const message =
+        typeof errorData === "string"
+          ? errorData
+          : errorData.message || JSON.stringify(errorData);
+      throw new Error(`Discord API Error (${response.status}): ${message}`);
+    }
+
+    if (response.status === 204) {
+      return {} as T;
+    }
+
+    return (await response.json()) as T;
   }
 }
 

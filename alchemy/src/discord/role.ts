@@ -2,7 +2,11 @@ import type { Context } from "../context.ts";
 import { Resource, ResourceKind } from "../resource.ts";
 import { createDiscordApi, type DiscordApiOptions } from "./api.ts";
 import { isGuild, type Guild } from "./guild.ts";
-import { DiscordPermissions, type DiscordPermissionName } from "./types.ts";
+import {
+  DiscordPermissions,
+  type DiscordPermissionName,
+  type DiscordApiRole,
+} from "./types.ts";
 
 export interface RoleProps extends DiscordApiOptions {
   /**
@@ -42,12 +46,27 @@ export interface RoleProps extends DiscordApiOptions {
   adopt?: boolean;
 }
 
-export type Role = Omit<RoleProps, "adopt" | "token" | "botToken" | "guild" | "permissions"> & {
-  id: string;
-  guildId: string;
-  permissions: string;
-  type: "discord::Role";
+export type Role = Omit<
+  RoleProps,
+  "adopt" | "token" | "botToken" | "guild" | "permissions"
+> &
+  Resource<"discord::Role"> & {
+    id: string;
+    guildId: string;
+    permissions: string;
+    type: "discord::Role";
+  };
+
+type RolePropsNormalized = Omit<RoleProps, "guild"> & {
+  guild: string;
 };
+
+export function Role(id: string, props: RoleProps): Promise<Role> {
+  return _Role(id, {
+    ...props,
+    guild: isGuild(props.guild) ? props.guild.id : props.guild.toString(),
+  });
+}
 
 /**
  * Manages a Discord Role.
@@ -63,15 +82,15 @@ export type Role = Omit<RoleProps, "adopt" | "token" | "botToken" | "guild" | "p
  *   }
  * });
  */
-export const Role = Resource(
+const _Role = Resource(
   "discord::Role",
   async function (
     this: Context<Role>,
     id: string,
-    props: RoleProps
+    props: RolePropsNormalized,
   ): Promise<Role> {
     const api = createDiscordApi(props);
-    const guildId = isGuild(props.guild) ? props.guild.id : props.guild.toString();
+    const guildId = props.guild;
 
     // Convert permission object to bitmask string
     let permissionsBitmask = 0n;
@@ -91,8 +110,9 @@ export const Role = Resource(
       if (this.output?.id) {
         try {
           await api.delete(`/guilds/${guildId}/roles/${this.output.id}`);
-        } catch (error: any) {
-          if (!error.message?.includes("404")) {
+        } catch (error: unknown) {
+          const message = (error as Error).message;
+          if (!message?.includes("404")) {
             throw error;
           }
         }
@@ -101,27 +121,34 @@ export const Role = Resource(
     }
 
     let roleId = this.output?.id;
-    let roleData: any;
+    let roleData: DiscordApiRole | undefined;
 
     if (this.phase === "create" || !roleId) {
       if (props.adopt && !this.isReplacement) {
         try {
-          const roles = await api.get(`/guilds/${guildId}/roles`);
-          roleData = roles.find((r: any) => r.name === props.name);
+          const roles = await api.get<DiscordApiRole[]>(
+            `/guilds/${guildId}/roles`,
+          );
+          roleData = roles.find((r) => r.name === props.name);
           if (roleData) {
             roleId = roleData.id;
           }
-        } catch (e) { /* ignore */ }
+        } catch (e) {
+          /* ignore */
+        }
       }
 
       if (!roleId || this.isReplacement) {
-        const response = await api.post(`/guilds/${guildId}/roles`, {
-          name: props.name,
-          color: props.color,
-          hoist: props.hoist,
-          mentionable: props.mentionable,
-          permissions,
-        });
+        const response = await api.post<DiscordApiRole>(
+          `/guilds/${guildId}/roles`,
+          {
+            name: props.name,
+            color: props.color,
+            hoist: props.hoist,
+            mentionable: props.mentionable,
+            permissions,
+          },
+        );
         roleData = response;
         roleId = roleData.id;
       }
@@ -134,17 +161,26 @@ export const Role = Resource(
         props.mentionable !== this.output.mentionable ||
         permissions !== this.output.permissions
       ) {
-        roleData = await api.patch(`/guilds/${guildId}/roles/${roleId}`, {
-          name: props.name,
-          color: props.color,
-          hoist: props.hoist,
-          mentionable: props.mentionable,
-          permissions,
-        });
+        roleData = await api.patch<DiscordApiRole>(
+          `/guilds/${guildId}/roles/${roleId}`,
+          {
+            name: props.name,
+            color: props.color,
+            hoist: props.hoist,
+            mentionable: props.mentionable,
+            permissions,
+          },
+        );
       } else {
-        const roles = await api.get(`/guilds/${guildId}/roles`);
-        roleData = roles.find((r: any) => r.id === roleId);
+        const roles = await api.get<DiscordApiRole[]>(
+          `/guilds/${guildId}/roles`,
+        );
+        roleData = roles.find((r) => r.id === roleId);
       }
+    }
+
+    if (!roleData) {
+      throw new Error(`Failed to find role ${roleId}`);
     }
 
     return {
@@ -156,13 +192,13 @@ export const Role = Resource(
       mentionable: roleData.mentionable,
       permissions: roleData.permissions,
       type: "discord::Role",
-    };
-  }
+    } as any as Role;
+  },
 );
 
 /**
  * Type guard for Role resource
  */
-export function isRole(resource: any): resource is Role {
-  return resource?.[ResourceKind] === "discord::Role";
+export function isRole(resource: unknown): resource is Role {
+  return (resource as any)?.[ResourceKind] === "discord::Role";
 }

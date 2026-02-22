@@ -10,6 +10,8 @@ The Discord provider allows you to manage Discord servers (guilds), channels, ro
 - [Channel](./channel.md) - Manage text, voice, and category channels.
 - [Role](./role.md) - Configure permissions and colors for roles.
 - [Webhook](./webhook.md) - Create entry points for automated messages.
+- [Sticker](./sticker.md) - Manage custom server stickers.
+- [SoundboardSound](./soundboard-sound.md) - Manage custom soundboard sounds.
 
 ## Example Usage
 

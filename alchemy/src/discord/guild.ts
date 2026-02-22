@@ -1,7 +1,7 @@
 import type { Context } from "../context.ts";
 import { Resource, ResourceKind } from "../resource.ts";
 import { createDiscordApi, type DiscordApiOptions } from "./api.ts";
-import type { DiscordVerificationLevel } from "./types.ts";
+import type { DiscordVerificationLevel, DiscordApiGuild } from "./types.ts";
 
 export interface GuildProps extends DiscordApiOptions {
   /**
@@ -21,11 +21,11 @@ export interface GuildProps extends DiscordApiOptions {
   adopt?: boolean;
 }
 
-export type Guild = Omit<GuildProps, "adopt" | "token" | "botToken"> & {
+export interface Guild extends GuildProps {
   id: string;
   ownerId: string;
   type: "discord::Guild";
-};
+}
 
 /**
  * Manages a Discord Guild (Server).
@@ -41,7 +41,7 @@ export const Guild = Resource(
   async function (
     this: Context<Guild>,
     id: string,
-    props: GuildProps
+    props: GuildProps,
   ): Promise<Guild> {
     const api = createDiscordApi(props);
 
@@ -52,9 +52,12 @@ export const Guild = Resource(
       if (this.output?.id) {
         try {
           await api.delete(`/guilds/${this.output.id}`);
-        } catch (error: any) {
-          if (!error.message?.includes("404")) {
-            console.warn(`Failed to delete guild ${this.output.id}: ${error.message}`);
+        } catch (error: unknown) {
+          const message = (error as Error).message;
+          if (!message?.includes("404")) {
+            console.warn(
+              `Failed to delete guild ${this.output.id}: ${message}`,
+            );
           }
         }
       }
@@ -62,28 +65,30 @@ export const Guild = Resource(
     }
 
     let guildId = this.output?.id;
-    let guildData: any;
+    let guildData: DiscordApiGuild | undefined;
 
     if (this.phase === "create" || !guildId) {
       if (props.adopt && !this.isReplacement) {
         // Adoption in Discord is basically verifying access
         try {
-          guildData = await api.get(`/guilds/${id}`); // Assumes id is the Discord Guild ID if adopting
+          guildData = await api.get<DiscordApiGuild>(`/guilds/${id}`); // Assumes id is the Discord Guild ID if adopting
           guildId = guildData.id;
         } catch (e) {
           // If id isn't a guild id, try fetching all guilds and matching by name
-          const guilds = await api.get("/users/@me/guilds");
-          guildData = guilds.find((g: any) => g.name === props.name);
+          const guilds = await api.get<DiscordApiGuild[]>("/users/@me/guilds");
+          guildData = guilds.find((g) => g.name === props.name);
           if (guildData) {
             guildId = guildData.id;
           } else {
-            throw new Error(`Failed to adopt guild "${props.name}". Make sure the bot is a member.`);
+            throw new Error(
+              `Failed to adopt guild "${props.name}". Make sure the bot is a member.`,
+            );
           }
         }
       }
 
       if (!guildId || this.isReplacement) {
-        const response = await api.post("/guilds", {
+        const response = await api.post<DiscordApiGuild>("/guilds", {
           name: props.name,
           verification_level: props.verificationLevel,
         });
@@ -92,29 +97,37 @@ export const Guild = Resource(
       }
     } else {
       // Update mutable properties
-      if (props.name !== this.output.name || props.verificationLevel !== this.output.verificationLevel) {
-        guildData = await api.patch(`/guilds/${guildId}`, {
+      if (
+        props.name !== this.output.name ||
+        props.verificationLevel !== this.output.verificationLevel
+      ) {
+        guildData = await api.patch<DiscordApiGuild>(`/guilds/${guildId}`, {
           name: props.name,
           verification_level: props.verificationLevel,
         });
       } else {
-        guildData = await api.get(`/guilds/${guildId}`);
+        guildData = await api.get<DiscordApiGuild>(`/guilds/${guildId}`);
       }
     }
 
+    if (!guildData) {
+      throw new Error(`Failed to find guild ${guildId}`);
+    }
+
     return {
+      ...props,
       id: guildId as string,
       name: guildData.name,
       verificationLevel: guildData.verification_level,
       ownerId: guildData.owner_id,
       type: "discord::Guild",
-    };
-  }
+    } as any as Guild;
+  },
 );
 
 /**
  * Type guard for Guild resource
  */
-export function isGuild(resource: any): resource is Guild {
-  return resource?.[ResourceKind] === "discord::Guild";
+export function isGuild(resource: unknown): resource is Guild {
+  return (resource as any)?.[ResourceKind] === "discord::Guild";
 }
