@@ -1,0 +1,80 @@
+---
+order: 20
+title: Porkbun
+description: Learn how to register domains and manage DNS records on Porkbun using Alchemy.
+---
+
+# Getting Started with Porkbun
+
+Porkbun is a developer-friendly domain registrar. Alchemy allows you to programmatically register domains and manage DNS records using their API.
+
+## Prerequisites
+
+1.  A **Porkbun** account.
+2.  An **API Key** and **Secret API Key**.
+
+### Generating API Keys
+
+1.  Log in to your [Porkbun Account](https://porkbun.com/account/login).
+2.  Navigate to **Account** > **API Access**.
+3.  Generate a new API key and secret key.
+4.  **Important**: Ensure you enable "API Access" for each domain you want to manage, or enable global access if available.
+
+Store these keys in your environment:
+
+```sh
+export PORKBUN_API_KEY="pk1_..."
+export PORKBUN_SECRET_API_KEY="sk1_..."
+```
+
+## Manage an existing domain
+
+Create an `alchemy.run.ts` file:
+
+```ts
+import { alchemy } from "alchemy";
+import { Domain, DNSRecord } from "alchemy/porkbun";
+
+const app = await alchemy("my-dns-setup");
+
+// 1. Adopt your existing domain
+const domain = await Domain("main", {
+  domain: "my-site.com",
+  adopt: true,
+  autoRenew: true
+});
+
+// 2. Add an A record pointing to a server
+await DNSRecord("web-ip", {
+  domain,
+  name: "www",
+  type: "A",
+  content: "1.2.3.4"
+});
+
+await app.finalize();
+```
+
+## Deploy
+
+Run the script to sync your DNS settings:
+
+::: code-group
+
+```sh [bun]
+bun ./alchemy.run.ts
+```
+
+```sh [npm]
+npx tsx ./alchemy.run.ts
+```
+
+:::
+
+## Safety Features
+
+Porkbun does not have a sandbox environment. Alchemy includes safety features to prevent accidental high charges:
+
+*   **`maxCost`**: Set a maximum USD price for registration. If the domain is premium or more expensive than this limit, Alchemy will fail before purchasing.
+*   **`agreeToTerms`**: You must explicitly set this to `true` to register a new domain.
+*   **Adoption**: Use `adopt: true` to manage domains you already own without risking a new registration attempt.

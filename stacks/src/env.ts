@@ -16,6 +16,12 @@ export const NEON_API_KEY = alchemy.secret.env.NEON_API_KEY;
 
 export const UPSTASH_API_KEY = alchemy.secret.env.UPSTASH_API_KEY;
 
+export const PORKBUN_API_KEY = alchemy.secret.env.PORKBUN_API_KEY;
+
+export const PORKBUN_SECRET_API_KEY = alchemy.secret.env.PORKBUN_SECRET_API_KEY;
+
+export const PORKBUN_TEST_DOMAIN = alchemy.env.PORKBUN_TEST_DOMAIN;
+
 export default {
   stage: process.env.BRANCH_PREFIX || "prod",
   phase:
