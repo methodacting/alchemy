@@ -1,6 +1,10 @@
 import type { Context } from "../context.ts";
 import { Resource, ResourceKind } from "../resource.ts";
-import { createLinearClient, linearGraphql, type LinearApiOptions } from "./api.ts";
+import {
+  createLinearClient,
+  linearGraphql,
+  type LinearApiOptions,
+} from "./api.ts";
 import { isTeam, type LinearTeam } from "./team.ts";
 import {
   WEBHOOK_CREATE_MUTATION,
@@ -41,7 +45,10 @@ export interface WebhookProps extends LinearApiOptions {
   adopt?: boolean;
 }
 
-export type LinearWebhook = Omit<WebhookProps, "adopt" | "token" | "apiKey" | "team"> & {
+export type LinearWebhook = Omit<
+  WebhookProps,
+  "adopt" | "token" | "apiKey" | "team"
+> & {
   id: string;
   teamId?: string;
   type: "linear::Webhook";
@@ -51,10 +58,17 @@ type WebhookPropsNormalized = Omit<WebhookProps, "team"> & {
   team?: string;
 };
 
-export function Webhook(id: string, props: WebhookProps): Promise<LinearWebhook> {
+export function Webhook(
+  id: string,
+  props: WebhookProps,
+): Promise<LinearWebhook> {
   return _Webhook(id, {
     ...props,
-    team: props.team ? (isTeam(props.team) ? props.team.id : props.team.toString()) : undefined,
+    team: props.team
+      ? isTeam(props.team)
+        ? props.team.id
+        : props.team.toString()
+      : undefined,
   });
 }
 
@@ -80,9 +94,13 @@ const _Webhook = Resource(
     if (this.phase === "delete") {
       if (this.output?.id) {
         try {
-          await linearGraphql<WebhookDeleteResponse>(client, WEBHOOK_DELETE_MUTATION, {
-            id: this.output.id,
-          });
+          await linearGraphql<WebhookDeleteResponse>(
+            client,
+            WEBHOOK_DELETE_MUTATION,
+            {
+              id: this.output.id,
+            },
+          );
         } catch (error: unknown) {
           const message = (error as Error).message;
           if (!message?.includes("not found")) {
@@ -107,7 +125,9 @@ const _Webhook = Resource(
               filter: { url: { eq: props.url } },
             },
           );
-          webhookData = existing.webhooks.nodes.find((webhook) => webhook.url === props.url);
+          webhookData = existing.webhooks.nodes.find(
+            (webhook) => webhook.url === props.url,
+          );
           if (webhookData) {
             webhookId = webhookData.id;
           }

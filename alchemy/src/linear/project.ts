@@ -1,6 +1,10 @@
 import type { Context } from "../context.ts";
 import { Resource, ResourceKind } from "../resource.ts";
-import { createLinearClient, linearGraphql, type LinearApiOptions } from "./api.ts";
+import {
+  createLinearClient,
+  linearGraphql,
+  type LinearApiOptions,
+} from "./api.ts";
 import { isTeam, type LinearTeam } from "./team.ts";
 import {
   PROJECT_CREATE_MUTATION,
@@ -39,7 +43,10 @@ export interface ProjectProps extends LinearApiOptions {
   adopt?: boolean;
 }
 
-export type LinearProject = Omit<ProjectProps, "adopt" | "token" | "apiKey" | "teams"> & {
+export type LinearProject = Omit<
+  ProjectProps,
+  "adopt" | "token" | "apiKey" | "teams"
+> & {
   id: string;
   teamIds: string[];
   type: "linear::Project";
@@ -49,10 +56,15 @@ type ProjectPropsNormalized = Omit<ProjectProps, "teams"> & {
   teams: string[];
 };
 
-export function Project(id: string, props: ProjectProps): Promise<LinearProject> {
+export function Project(
+  id: string,
+  props: ProjectProps,
+): Promise<LinearProject> {
   return _Project(id, {
     ...props,
-    teams: props.teams.map((team) => (isTeam(team) ? team.id : team.toString())),
+    teams: props.teams.map((team) =>
+      isTeam(team) ? team.id : team.toString(),
+    ),
   });
 }
 
@@ -78,9 +90,13 @@ const _Project = Resource(
     if (this.phase === "delete") {
       if (this.output?.id) {
         try {
-          await linearGraphql<ProjectDeleteResponse>(client, PROJECT_DELETE_MUTATION, {
-            id: this.output.id,
-          });
+          await linearGraphql<ProjectDeleteResponse>(
+            client,
+            PROJECT_DELETE_MUTATION,
+            {
+              id: this.output.id,
+            },
+          );
         } catch (error: unknown) {
           const message = (error as Error).message;
           if (!message?.includes("not found")) {

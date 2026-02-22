@@ -28,10 +28,14 @@ const LINEAR_API_ENDPOINT = "https://api.linear.app/graphql";
 export function createLinearClient(
   options: LinearApiOptions = {},
 ): LinearClientContext {
-  const apiKey = Secret.unwrap(options.apiKey ?? process.env.LINEAR_API_KEY ?? "");
+  const apiKey = Secret.unwrap(
+    options.apiKey ?? process.env.LINEAR_API_KEY ?? "",
+  );
 
   if (!apiKey) {
-    throw new Error("LINEAR_API_KEY environment variable or apiKey prop is required");
+    throw new Error(
+      "LINEAR_API_KEY environment variable or apiKey prop is required",
+    );
   }
 
   return {

@@ -1,6 +1,10 @@
 import type { Context } from "../context.ts";
 import { Resource, ResourceKind } from "../resource.ts";
-import { createLinearClient, linearGraphql, type LinearApiOptions } from "./api.ts";
+import {
+  createLinearClient,
+  linearGraphql,
+  type LinearApiOptions,
+} from "./api.ts";
 import { isTeam, type LinearTeam } from "./team.ts";
 import {
   ISSUE_LABEL_CREATE_MUTATION,
@@ -41,7 +45,10 @@ export interface LabelProps extends LinearApiOptions {
   adopt?: boolean;
 }
 
-export type LinearLabel = Omit<LabelProps, "adopt" | "token" | "apiKey" | "team"> & {
+export type LinearLabel = Omit<
+  LabelProps,
+  "adopt" | "token" | "apiKey" | "team"
+> & {
   id: string;
   teamId?: string;
   type: "linear::Label";
@@ -54,7 +61,11 @@ type LabelPropsNormalized = Omit<LabelProps, "team"> & {
 export function Label(id: string, props: LabelProps): Promise<LinearLabel> {
   return _Label(id, {
     ...props,
-    team: props.team ? (isTeam(props.team) ? props.team.id : props.team.toString()) : undefined,
+    team: props.team
+      ? isTeam(props.team)
+        ? props.team.id
+        : props.team.toString()
+      : undefined,
   });
 }
 
@@ -80,9 +91,13 @@ const _Label = Resource(
     if (this.phase === "delete") {
       if (this.output?.id) {
         try {
-          await linearGraphql<IssueLabelDeleteResponse>(client, ISSUE_LABEL_DELETE_MUTATION, {
-            id: this.output.id,
-          });
+          await linearGraphql<IssueLabelDeleteResponse>(
+            client,
+            ISSUE_LABEL_DELETE_MUTATION,
+            {
+              id: this.output.id,
+            },
+          );
         } catch (error: unknown) {
           const message = (error as Error).message;
           if (!message?.includes("not found")) {

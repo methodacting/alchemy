@@ -1,6 +1,10 @@
 import type { Context } from "../context.ts";
 import { Resource, ResourceKind } from "../resource.ts";
-import { createLinearClient, linearGraphql, type LinearApiOptions } from "./api.ts";
+import {
+  createLinearClient,
+  linearGraphql,
+  type LinearApiOptions,
+} from "./api.ts";
 import {
   TEAM_CREATE_MUTATION,
   TEAM_DELETE_MUTATION,
@@ -66,9 +70,13 @@ export const Team = Resource(
     if (this.phase === "delete") {
       if (this.output?.id) {
         try {
-          await linearGraphql<TeamDeleteResponse>(client, TEAM_DELETE_MUTATION, {
-            id: this.output.id,
-          });
+          await linearGraphql<TeamDeleteResponse>(
+            client,
+            TEAM_DELETE_MUTATION,
+            {
+              id: this.output.id,
+            },
+          );
         } catch (error: unknown) {
           const message = (error as Error).message;
           if (!message?.includes("not found")) {
@@ -93,7 +101,9 @@ export const Team = Resource(
               filter: { key: { eq: props.key } },
             },
           );
-          teamData = existing.teams.nodes.find((team) => team.key === props.key);
+          teamData = existing.teams.nodes.find(
+            (team) => team.key === props.key,
+          );
           if (teamData) {
             teamId = teamData.id;
           }
@@ -138,9 +148,13 @@ export const Team = Resource(
     }
 
     if (!teamData) {
-      const fetched = await linearGraphql<TeamQueryResponse>(client, TEAM_QUERY, {
-        id: teamId,
-      });
+      const fetched = await linearGraphql<TeamQueryResponse>(
+        client,
+        TEAM_QUERY,
+        {
+          id: teamId,
+        },
+      );
       teamData = fetched.team;
     }
 

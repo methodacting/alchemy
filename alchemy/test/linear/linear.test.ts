@@ -25,7 +25,9 @@ describe("Linear", () => {
 
     const linear = createLinearClient();
     const baseName = `${BRANCH_PREFIX}-test`;
-    const keySeed = BRANCH_PREFIX.split("").reduce((sum, ch) => sum + ch.charCodeAt(0), 0) % 1000;
+    const keySeed =
+      BRANCH_PREFIX.split("").reduce((sum, ch) => sum + ch.charCodeAt(0), 0) %
+      1000;
     const teamKey = `T${keySeed.toString().padStart(3, "0")}`; // Linear team keys must be unique and deterministic
 
     let team: LinearTeam;
@@ -73,11 +75,14 @@ describe("Linear", () => {
       expect(webhook.teamId).toBe(team.id);
 
       // Verify via GraphQL
-      const apiTeam = await linearGraphql<TeamQueryResponse>(linear, TEAM_QUERY, {
-        id: team.id,
-      });
+      const apiTeam = await linearGraphql<TeamQueryResponse>(
+        linear,
+        TEAM_QUERY,
+        {
+          id: team.id,
+        },
+      );
       expect(apiTeam.team.name).toBe(`${baseName} Engineering`);
-
     } finally {
       await destroy(scope);
     }
