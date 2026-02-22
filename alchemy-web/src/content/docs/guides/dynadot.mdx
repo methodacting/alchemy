@@ -1,0 +1,81 @@
+---
+order: 30
+title: Dynadot
+description: Learn how to register domains and manage DNS records on Dynadot using Alchemy.
+---
+
+# Getting Started with Dynadot
+
+Dynadot offers a powerful RESTful API for domain management. Alchemy allows you to programmatically register domains and manage DNS records using their V2 API.
+
+## Prerequisites
+
+1.  A **Dynadot** account.
+2.  An **API Key** and **API Secret**.
+
+### Generating API Keys
+
+1.  Log in to your [Dynadot Account](https://www.dynadot.com/account/login.html).
+2.  Navigate to **My Domains** > **API**.
+3.  Enable API access and generate your **API Key**.
+4.  Note your **API Secret** (used for request signing).
+
+Store these keys in your environment:
+
+```sh
+export DYNADOT_API_KEY="your-api-key"
+export DYNADOT_API_SECRET="your-api-secret"
+```
+
+## Using the Sandbox
+
+Dynadot provides a full Sandbox environment for testing. You can enable it globally via an environment variable or per-resource in your code.
+
+```sh
+export DYNADOT_SANDBOX="true"
+```
+
+## Example Application
+
+Create an `alchemy.run.ts` file:
+
+```ts
+import { alchemy } from "alchemy";
+import { Domain, DNSRecord } from "alchemy/dynadot";
+
+const app = await alchemy("my-dns-setup");
+
+// 1. Register a domain in the sandbox
+const domain = await Domain("main", {
+  domainName: "test-alchemy-domain.com",
+  duration: 1,
+  sandbox: true
+});
+
+// 2. Add an A record
+await DNSRecord("web-ip", {
+  domain,
+  host: "www",
+  type: "A",
+  value: "1.2.3.4",
+  sandbox: true
+});
+
+await app.finalize();
+```
+
+## Deploy
+
+Run the script to sync your settings:
+
+::: code-group
+
+```sh [bun]
+bun ./alchemy.run.ts
+```
+
+```sh [npm]
+npx tsx ./alchemy.run.ts
+```
+
+:::
