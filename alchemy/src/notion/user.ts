@@ -27,7 +27,7 @@ export const User = Resource(
   async function (
     this: Context<User>,
     id: string,
-    props: UserProps
+    props: UserProps,
   ): Promise<User> {
     const notion = createNotionClient(props);
 
@@ -44,7 +44,7 @@ export const User = Resource(
       avatarUrl: userData.avatar_url || undefined,
       type: "notion::User",
     };
-  }
+  },
 );
 
 /**

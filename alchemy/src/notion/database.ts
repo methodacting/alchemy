@@ -1,6 +1,4 @@
-import type {
-  CreateDatabaseParameters,
-} from "@notionhq/client/build/src/api-endpoints";
+import type { CreateDatabaseParameters } from "@notionhq/client/build/src/api-endpoints";
 import type { Context } from "../context.ts";
 import { Resource, ResourceKind } from "../resource.ts";
 import { createNotionClient, type NotionApiOptions } from "./api.ts";
@@ -41,6 +39,17 @@ export type Database = Omit<DatabaseProps, "adopt" | "token" | "parent"> & {
   type: "notion::Database";
 };
 
+type DatabasePropsNormalized = Omit<DatabaseProps, "parent"> & {
+  parent: string;
+};
+
+export function Database(id: string, props: DatabaseProps): Promise<Database> {
+  return _Database(id, {
+    ...props,
+    parent: isPage(props.parent) ? props.parent.id : props.parent.toString(),
+  });
+}
+
 /**
  * Creates a Notion Database Container.
  * In the 2025-09-03 API, a Database is an organizational container
@@ -52,22 +61,25 @@ export type Database = Omit<DatabaseProps, "adopt" | "token" | "parent"> & {
  *   title: [{ text: { content: "Project Hub" } }]
  * });
  */
-export const Database = Resource(
+const _Database = Resource(
   "notion::Database",
   async function (
     this: Context<Database>,
     id: string,
-    props: DatabaseProps
+    props: DatabasePropsNormalized,
   ): Promise<Database> {
     const notion = createNotionClient(props);
-    const parentId = isPage(props.parent) ? props.parent.id : props.parent.toString();
+    const parentId = props.parent;
 
     if (this.phase === "delete") {
       if (this.output?.id) {
         try {
           await notion.blocks.delete({ block_id: this.output.id });
         } catch (error: any) {
-          if (!error.message?.includes("404") && !error.status?.toString().includes("404")) {
+          if (
+            !error.message?.includes("404") &&
+            !error.status?.toString().includes("404")
+          ) {
             throw error;
           }
         }
@@ -83,7 +95,9 @@ export const Database = Resource(
         try {
           databaseData = await notion.databases.retrieve({ database_id: id });
           databaseId = databaseData.id;
-        } catch (e) { /* ignore */ }
+        } catch (e) {
+          /* ignore */
+        }
       }
 
       if (!databaseId || this.isReplacement) {
@@ -116,12 +130,12 @@ export const Database = Resource(
       url: databaseData.url,
       type: "notion::Database",
     };
-  }
+  },
 );
 
 /**
  * Type guard for Database resource
  */
-export function isDatabase(resource: any): resource is Database {
-  return resource?.[ResourceKind] === "notion::Database";
+export function isDatabase(resource: unknown): resource is Database {
+  return (resource as any)?.[ResourceKind] === "notion::Database";
 }

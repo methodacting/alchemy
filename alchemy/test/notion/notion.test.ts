@@ -17,20 +17,22 @@ const test = alchemy.test(import.meta, {
 describe("Notion", () => {
   test("create nested infrastructure hierarchy", async (scope) => {
     if (!process.env.NOTION_TOKEN || !process.env.NOTION_PARENT_PAGE_ID) {
-      console.warn("Skipping Notion tests: NOTION_TOKEN or NOTION_PARENT_PAGE_ID not set");
+      console.warn(
+        "Skipping Notion tests: NOTION_TOKEN or NOTION_PARENT_PAGE_ID not set",
+      );
       return;
     }
 
     const notion = createNotionClient();
-    const baseName = `${BRANCH_PREFIX}-test-${Date.now()}`;
+    const baseName = `${BRANCH_PREFIX}-test`;
 
     try {
       // 1. Create Parent Page
       const rootPage = await Page("root", {
         parent: process.env.NOTION_PARENT_PAGE_ID,
         properties: {
-          title: [{ text: { content: `${baseName} Workspace` } }]
-        }
+          title: { title: [{ text: { content: `${baseName} Workspace` } }] },
+        },
       });
 
       expect(rootPage.id).toBeDefined();
@@ -38,7 +40,7 @@ describe("Notion", () => {
       // 2. Create Database Container
       const db = await Database("hub", {
         parent: rootPage,
-        title: [{ text: { content: "Resource Hub" } }]
+        title: [{ text: { content: "Resource Hub" } }],
       });
 
       expect(db.id).toBeDefined();
@@ -48,9 +50,11 @@ describe("Notion", () => {
         database: db,
         title: "Deployment Logs",
         properties: {
-          "Name": { title: {} },
-          "Status": { select: { options: [{ name: "Success", color: "green" }] } }
-        }
+          Name: { title: {} },
+          Status: {
+            select: { options: [{ name: "Success", color: "green" }] },
+          },
+        },
       });
 
       expect(source.id).toBeDefined();
@@ -60,9 +64,9 @@ describe("Notion", () => {
       const entry = await Page("log-entry", {
         parent: source,
         properties: {
-          "Name": { title: [{ text: { content: "Manual Deploy" } }] },
-          "Status": { select: { name: "Success" } }
-        }
+          Name: { title: [{ text: { content: "Manual Deploy" } }] },
+          Status: { select: { name: "Success" } },
+        },
       });
 
       expect(entry.id).toBeDefined();
@@ -74,17 +78,20 @@ describe("Notion", () => {
         block: {
           type: "paragraph",
           paragraph: {
-            rich_text: [{ text: { content: "This deployment was verified by Alchemy." } }]
-          }
-        }
+            rich_text: [
+              { text: { content: "This deployment was verified by Alchemy." } },
+            ],
+          },
+        },
       });
 
       expect(content.id).toBeDefined();
 
       // Verify via SDK
-      const apiSource = await (notion as any).dataSources.retrieve({ data_source_id: source.id });
-      expect(apiSource.title).toBe("Deployment Logs");
-
+      const apiSource = await (notion as any).dataSources.retrieve({
+        data_source_id: source.id,
+      });
+      expect(apiSource.title[0].plain_text).toBe("Deployment Logs");
     } finally {
       await destroy(scope);
     }

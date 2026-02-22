@@ -49,6 +49,36 @@ export type Page = Omit<PageProps, "adopt" | "token" | "parent"> & {
   type: "notion::Page";
 };
 
+type PagePropsNormalized = Omit<PageProps, "parent"> & {
+  parentId: string;
+  parentType: "page_id" | "database_id" | "data_source_id";
+};
+
+export function Page(id: string, props: PageProps): Promise<Page> {
+  let parentId: string;
+  let parentType: "page_id" | "database_id" | "data_source_id";
+
+  if (isDataSource(props.parent)) {
+    parentId = props.parent.id;
+    parentType = "data_source_id";
+  } else if (isDatabase(props.parent)) {
+    parentId = props.parent.id;
+    parentType = "database_id";
+  } else if (isPage(props.parent)) {
+    parentId = props.parent.id;
+    parentType = "page_id";
+  } else {
+    parentId = props.parent.toString();
+    parentType = "page_id";
+  }
+
+  return _Page(id, {
+    ...props,
+    parentId,
+    parentType,
+  });
+}
+
 /**
  * Creates a Notion Page.
  *
@@ -60,38 +90,26 @@ export type Page = Omit<PageProps, "adopt" | "token" | "parent"> & {
  *   }
  * });
  */
-export const Page = Resource(
+const _Page = Resource(
   "notion::Page",
   async function (
     this: Context<Page>,
     id: string,
-    props: PageProps
+    props: PagePropsNormalized,
   ): Promise<Page> {
     const notion = createNotionClient(props);
-    
-    let parentId: string;
-    let parentType: "page_id" | "database_id" | "data_source_id";
-
-    if (isDataSource(props.parent)) {
-      parentId = props.parent.id;
-      parentType = "data_source_id";
-    } else if (isDatabase(props.parent)) {
-      parentId = props.parent.id;
-      parentType = "database_id"; // Deprecated but still works? Better use Data Source.
-    } else if (isPage(props.parent)) {
-      parentId = props.parent.id;
-      parentType = "page_id";
-    } else {
-      parentId = props.parent.toString();
-      parentType = "page_id"; 
-    }
+    const parentId = props.parentId;
+    const parentType = props.parentType;
 
     if (this.phase === "delete") {
       if (this.output?.id) {
         try {
           await notion.blocks.delete({ block_id: this.output.id });
         } catch (error: any) {
-          if (!error.message?.includes("404") && !error.status?.toString().includes("404")) {
+          if (
+            !error.message?.includes("404") &&
+            !error.status?.toString().includes("404")
+          ) {
             throw error;
           }
         }
@@ -107,7 +125,9 @@ export const Page = Resource(
         try {
           pageData = await notion.pages.retrieve({ page_id: id });
           pageId = pageData.id;
-        } catch (e) { /* ignore */ }
+        } catch (e) {
+          /* ignore */
+        }
       }
 
       if (!pageId || this.isReplacement) {
@@ -119,7 +139,9 @@ export const Page = Resource(
           children: props.children,
         };
 
-        const response = await notion.pages.create(payload as CreatePageParameters);
+        const response = await notion.pages.create(
+          payload as CreatePageParameters,
+        );
         pageData = response;
         pageId = pageData.id;
       }
@@ -144,12 +166,12 @@ export const Page = Resource(
       url: pageData.url,
       type: "notion::Page",
     };
-  }
+  },
 );
 
 /**
  * Type guard for Page resource
  */
-export function isPage(resource: any): resource is Page {
-  return resource?.[ResourceKind] === "notion::Page";
+export function isPage(resource: unknown): resource is Page {
+  return (resource as any)?.[ResourceKind] === "notion::Page";
 }

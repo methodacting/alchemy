@@ -23,6 +23,21 @@ export type Block = Omit<BlockProps, "token" | "parent"> & {
   type: "notion::Block";
 };
 
+type BlockPropsNormalized = Omit<BlockProps, "parent"> & {
+  parent: string;
+};
+
+export function Block(id: string, props: BlockProps): Promise<Block> {
+  return _Block(id, {
+    ...props,
+    parent: isPage(props.parent)
+      ? props.parent.id
+      : isBlock(props.parent)
+        ? props.parent.id
+        : props.parent.toString(),
+  });
+}
+
 /**
  * Creates a Notion Block.
  *
@@ -35,22 +50,25 @@ export type Block = Omit<BlockProps, "token" | "parent"> & {
  *   }
  * });
  */
-export const Block = Resource(
+const _Block = Resource(
   "notion::Block",
   async function (
     this: Context<Block>,
     id: string,
-    props: BlockProps
+    props: BlockPropsNormalized,
   ): Promise<Block> {
     const notion = createNotionClient(props);
-    const parentId = isPage(props.parent) ? props.parent.id : (isBlock(props.parent) ? props.parent.id : props.parent.toString());
+    const parentId = props.parent;
 
     if (this.phase === "delete") {
       if (this.output?.id) {
         try {
           await notion.blocks.delete({ block_id: this.output.id });
         } catch (error: any) {
-          if (!error.message?.includes("404") && !error.status?.toString().includes("404")) {
+          if (
+            !error.message?.includes("404") &&
+            !error.status?.toString().includes("404")
+          ) {
             throw error;
           }
         }
@@ -90,12 +108,12 @@ export const Block = Resource(
       block: props.block,
       type: "notion::Block",
     };
-  }
+  },
 );
 
 /**
  * Type guard for Block resource
  */
-export function isBlock(resource: any): resource is Block {
-  return resource?.[ResourceKind] === "notion::Block";
+export function isBlock(resource: unknown): resource is Block {
+  return (resource as any)?.[ResourceKind] === "notion::Block";
 }
