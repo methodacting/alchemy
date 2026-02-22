@@ -2,7 +2,10 @@ import { Context } from "../context.ts";
 import { Resource, ResourceKind } from "../resource.ts";
 import { Secret } from "../secret.ts";
 import { createHetznerApi, HetznerApiOptions } from "./api.ts";
-import type { HetznerCertificateStatus, HetznerCertificateType } from "./types.ts";
+import type {
+  HetznerCertificateStatus,
+  HetznerCertificateType,
+} from "./types.ts";
 
 export interface CertificateProps extends HetznerApiOptions {
   /**
@@ -43,7 +46,10 @@ export interface CertificateProps extends HetznerApiOptions {
   adopt?: boolean;
 }
 
-export type Certificate = Omit<CertificateProps, "adopt" | "token" | "privateKey" | "type"> & {
+export type Certificate = Omit<
+  CertificateProps,
+  "adopt" | "token" | "privateKey" | "type"
+> & {
   id: string;
   name: string;
   certificateType: HetznerCertificateType;
@@ -78,17 +84,21 @@ export const Certificate = Resource(
   async function (
     this: Context<Certificate>,
     id: string,
-    props: CertificateProps
+    props: CertificateProps,
   ): Promise<Certificate> {
     const api = createHetznerApi(props);
-    const name = props.name ?? this.output?.name ?? this.scope.createPhysicalName(id);
+    const name =
+      props.name ?? this.output?.name ?? this.scope.createPhysicalName(id);
 
     if (this.phase === "delete") {
       if (this.output?.id) {
         try {
           await api.delete(`/certificates/${this.output.id}`);
         } catch (error: any) {
-          if (!error.message?.includes("404") && !error.message?.includes("not found")) {
+          if (
+            !error.message?.includes("404") &&
+            !error.message?.includes("not found")
+          ) {
             throw error;
           }
         }
@@ -98,9 +108,13 @@ export const Certificate = Resource(
 
     if (this.phase === "update" && this.output) {
       const typeChanged = this.output.type !== props.type;
-      const domainsChanged = JSON.stringify(this.output.domainNames) !== JSON.stringify(props.domainNames);
-      const certChanged = props.type === "uploaded" && props.certificate !== this.output.certificate;
-      
+      const domainsChanged =
+        JSON.stringify(this.output.domainNames) !==
+        JSON.stringify(props.domainNames);
+      const certChanged =
+        props.type === "uploaded" &&
+        props.certificate !== this.output.certificate;
+
       if (typeChanged || domainsChanged || certChanged) {
         return this.replace(true);
       }
@@ -112,12 +126,16 @@ export const Certificate = Resource(
     if (this.phase === "create" || !certId) {
       if (props.adopt && !this.isReplacement) {
         try {
-          const { certificates } = await api.get<{ certificates: any[] }>(`/certificates?name=${name}`);
+          const { certificates } = await api.get<{ certificates: any[] }>(
+            `/certificates?name=${name}`,
+          );
           if (certificates.length > 0) {
             certId = certificates[0].id;
             certData = certificates[0];
           }
-        } catch (e) { /* ignore */ }
+        } catch (e) {
+          /* ignore */
+        }
       }
 
       if (!certId || this.isReplacement) {
@@ -136,21 +154,29 @@ export const Certificate = Resource(
 
         const response = await api.post<{ certificate: any }>(
           "/certificates",
-          payload
+          payload,
         );
         certData = response.certificate;
         certId = certData.id;
       }
     } else {
       // Update mutable properties (name, labels)
-      if (props.name !== this.output.name || JSON.stringify(props.labels) !== JSON.stringify(this.output.labels)) {
-        const response = await api.put<{ certificate: any }>(`/certificates/${certId}`, {
-          name,
-          labels: props.labels,
-        });
+      if (
+        props.name !== this.output.name ||
+        JSON.stringify(props.labels) !== JSON.stringify(this.output.labels)
+      ) {
+        const response = await api.put<{ certificate: any }>(
+          `/certificates/${certId}`,
+          {
+            name,
+            labels: props.labels,
+          },
+        );
         certData = response.certificate;
       } else {
-        const response = await api.get<{ certificate: any }>(`/certificates/${certId}`);
+        const response = await api.get<{ certificate: any }>(
+          `/certificates/${certId}`,
+        );
         certData = response.certificate;
       }
     }
@@ -169,12 +195,12 @@ export const Certificate = Resource(
       created: certData.created,
       type: "hetzner::Certificate",
     };
-  }
+  },
 );
 
 /**
  * Type guard for Certificate resource
  */
-export function isCertificate(resource: any): resource is Certificate {
-  return resource?.[ResourceKind] === "hetzner::Certificate";
+export function isCertificate(resource: unknown): resource is Certificate {
+  return (resource as any)?.[ResourceKind] === "hetzner::Certificate";
 }

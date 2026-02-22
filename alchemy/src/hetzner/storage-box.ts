@@ -3,7 +3,11 @@ import { Resource, ResourceKind } from "../resource.ts";
 import { Secret } from "../secret.ts";
 import { createHetznerApi, HetznerApiOptions } from "./api.ts";
 import { isSSHKey, type SSHKey } from "./ssh-key.ts";
-import type { HetznerLocation, HetznerStorageBoxAccessSettings, HetznerStorageBoxType } from "./types.ts";
+import type {
+  HetznerLocation,
+  HetznerStorageBoxAccessSettings,
+  HetznerStorageBoxType,
+} from "./types.ts";
 import { poll } from "../util/poll.ts";
 
 export interface StorageBoxProps extends HetznerApiOptions {
@@ -58,7 +62,10 @@ export interface StorageBoxProps extends HetznerApiOptions {
   delete?: boolean;
 }
 
-export type StorageBox = Omit<StorageBoxProps, "adopt" | "token" | "password" | "sshKeys" | "delete"> & {
+export type StorageBox = Omit<
+  StorageBoxProps,
+  "adopt" | "token" | "password" | "sshKeys" | "delete"
+> & {
   id: string;
   username: string;
   server: string;
@@ -83,17 +90,21 @@ export const StorageBox = Resource(
   async function (
     this: Context<StorageBox>,
     id: string,
-    props: StorageBoxProps
+    props: StorageBoxProps,
   ): Promise<StorageBox> {
     const api = createHetznerApi(props, "robot");
-    const name = props.name ?? this.output?.name ?? this.scope.createPhysicalName(id);
+    const name =
+      props.name ?? this.output?.name ?? this.scope.createPhysicalName(id);
 
     if (this.phase === "delete") {
       if (props.delete !== false && this.output?.id) {
         try {
           await api.delete(`/storage_boxes/${this.output.id}`);
         } catch (error: any) {
-          if (!error.message?.includes("404") && !error.message?.includes("not found")) {
+          if (
+            !error.message?.includes("404") &&
+            !error.message?.includes("not found")
+          ) {
             throw error;
           }
         }
@@ -110,21 +121,28 @@ export const StorageBox = Resource(
     let boxId = this.output?.id;
     let boxData: any;
 
-    const normalizedSshKeys: number[] = (props.sshKeys ?? []).map(key => {
-      if (typeof key === "string" || typeof key === "number") return parseInt(key.toString());
-      if (isSSHKey(key)) return parseInt(key.id);
-      return 0;
-    }).filter(id => id > 0);
+    const normalizedSshKeys: number[] = (props.sshKeys ?? [])
+      .map((key) => {
+        if (typeof key === "string" || typeof key === "number")
+          return parseInt(key.toString());
+        if (isSSHKey(key)) return parseInt(key.id);
+        return 0;
+      })
+      .filter((id) => id > 0);
 
     if (this.phase === "create" || !boxId) {
       if (props.adopt && !this.isReplacement) {
         try {
-          const { storage_boxes } = await api.get<{ storage_boxes: any[] }>(`/storage_boxes?name=${name}`);
+          const { storage_boxes } = await api.get<{ storage_boxes: any[] }>(
+            `/storage_boxes?name=${name}`,
+          );
           if (storage_boxes.length > 0) {
             boxId = storage_boxes[0].id;
             boxData = storage_boxes[0];
           }
-        } catch (e) { /* ignore */ }
+        } catch (e) {
+          /* ignore */
+        }
       }
 
       if (!boxId || this.isReplacement) {
@@ -140,71 +158,101 @@ export const StorageBox = Resource(
 
         const response = await api.post<{ storage_box: any; action?: any }>(
           "/storage_boxes",
-          payload
+          payload,
         );
         boxData = response.storage_box;
         boxId = boxData.id;
 
         if (response.action) {
-            await poll({
-                description: `storage box ${boxId} creation`,
-                fn: () => api.get<{ action: any }>(`/storage_boxes/actions/${response.action.id}`),
-                predicate: (res) => res.action.status === "success",
-                initialDelay: 2000,
-                maxDelay: 10000,
-                timeout: 120000
-            });
+          await poll({
+            description: `storage box ${boxId} creation`,
+            fn: () =>
+              api.get<{ action: any }>(
+                `/storage_boxes/actions/${response.action.id}`,
+              ),
+            predicate: (res) => res.action.status === "success",
+            initialDelay: 2000,
+            maxDelay: 10000,
+            timeout: 120000,
+          });
         }
-        
-        const freshResponse = await api.get<{ storage_box: any }>(`/storage_boxes/${boxId}`);
+
+        const freshResponse = await api.get<{ storage_box: any }>(
+          `/storage_boxes/${boxId}`,
+        );
         boxData = freshResponse.storage_box;
       }
     } else {
       // Update mutable properties (name, labels)
-      if (props.name !== this.output.name || JSON.stringify(props.labels) !== JSON.stringify(this.output.labels)) {
-        const response = await api.put<{ storage_box: any }>(`/storage_boxes/${boxId}`, {
-          name,
-          labels: props.labels,
-        });
+      if (
+        props.name !== this.output.name ||
+        JSON.stringify(props.labels) !== JSON.stringify(this.output.labels)
+      ) {
+        const response = await api.put<{ storage_box: any }>(
+          `/storage_boxes/${boxId}`,
+          {
+            name,
+            labels: props.labels,
+          },
+        );
         boxData = response.storage_box;
       }
 
       // Sync storage_box_type
       if (props.storageBoxType !== this.output.storageBoxType) {
-        const response = await api.post<{ action: any }>(`/storage_boxes/${boxId}/actions/change_type`, {
-          storage_box_type: props.storageBoxType
-        });
+        const response = await api.post<{ action: any }>(
+          `/storage_boxes/${boxId}/actions/change_type`,
+          {
+            storage_box_type: props.storageBoxType,
+          },
+        );
         await poll({
-            description: `storage box ${boxId} type change`,
-            fn: () => api.get<{ action: any }>(`/storage_boxes/actions/${response.action.id}`),
-            predicate: (res) => res.action.status === "success",
-            initialDelay: 2000,
-            maxDelay: 10000,
-            timeout: 300000 // Resizing can be slow
+          description: `storage box ${boxId} type change`,
+          fn: () =>
+            api.get<{ action: any }>(
+              `/storage_boxes/actions/${response.action.id}`,
+            ),
+          predicate: (res) => res.action.status === "success",
+          initialDelay: 2000,
+          maxDelay: 10000,
+          timeout: 300000, // Resizing can be slow
         });
       }
 
       // Sync access_settings
-      if (JSON.stringify(props.accessSettings) !== JSON.stringify(this.output.accessSettings)) {
-        const response = await api.post<{ action: any }>(`/storage_boxes/${boxId}/actions/update_access_settings`, props.accessSettings);
+      if (
+        JSON.stringify(props.accessSettings) !==
+        JSON.stringify(this.output.accessSettings)
+      ) {
+        const response = await api.post<{ action: any }>(
+          `/storage_boxes/${boxId}/actions/update_access_settings`,
+          props.accessSettings,
+        );
         await poll({
-            description: `storage box ${boxId} access settings update`,
-            fn: () => api.get<{ action: any }>(`/storage_boxes/actions/${response.action.id}`),
-            predicate: (res) => res.action.status === "success",
-            initialDelay: 1000,
-            maxDelay: 5000,
-            timeout: 60000
+          description: `storage box ${boxId} access settings update`,
+          fn: () =>
+            api.get<{ action: any }>(
+              `/storage_boxes/actions/${response.action.id}`,
+            ),
+          predicate: (res) => res.action.status === "success",
+          initialDelay: 1000,
+          maxDelay: 5000,
+          timeout: 60000,
         });
       }
 
       // Fetch updated data
-      const response = await api.get<{ storage_box: any }>(`/storage_boxes/${boxId}`);
+      const response = await api.get<{ storage_box: any }>(
+        `/storage_boxes/${boxId}`,
+      );
       boxData = response.storage_box;
     }
 
     if (!boxData && boxId) {
-        const response = await api.get<{ storage_box: any }>(`/storage_boxes/${boxId}`);
-        boxData = response.storage_box;
+      const response = await api.get<{ storage_box: any }>(
+        `/storage_boxes/${boxId}`,
+      );
+      boxData = response.storage_box;
     }
 
     return {
@@ -221,12 +269,12 @@ export const StorageBox = Resource(
       created: boxData.created,
       type: "hetzner::StorageBox",
     };
-  }
+  },
 );
 
 /**
  * Type guard for StorageBox resource
  */
-export function isStorageBox(resource: any): resource is StorageBox {
-  return resource?.[ResourceKind] === "hetzner::StorageBox";
+export function isStorageBox(resource: unknown): resource is StorageBox {
+  return (resource as any)?.[ResourceKind] === "hetzner::StorageBox";
 }

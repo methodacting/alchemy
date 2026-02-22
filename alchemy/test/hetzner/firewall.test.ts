@@ -6,9 +6,11 @@ import { Server } from "../../src/hetzner/server.ts";
 import { Firewall } from "../../src/hetzner/firewall.ts";
 import { createHetznerApi } from "../../src/hetzner/api.ts";
 import { BRANCH_PREFIX } from "../util.ts";
+
 import "../../src/test/vitest.ts";
 
-const api = createHetznerApi();
+const stableSuffix =
+  BRANCH_PREFIX.replace(/[^a-zA-Z0-9]/g, "").slice(0, 12) || "alchemy";
 
 const test = alchemy.test(import.meta, {
   prefix: BRANCH_PREFIX,
@@ -21,9 +23,11 @@ describe("Hetzner Firewall", () => {
       return;
     }
 
-    const baseName = `${BRANCH_PREFIX}-fw-test-${Date.now()}`;
-    let server: any;
-    let fw: any;
+    const api = createHetznerApi();
+
+    const baseName = `${BRANCH_PREFIX}-fw-test-${stableSuffix}`;
+    let server: Server;
+    let fw: Firewall;
 
     try {
       // 1. Create Firewall with one rule
@@ -33,10 +37,10 @@ describe("Hetzner Firewall", () => {
             direction: "in",
             protocol: "tcp",
             port: "80",
-            source_ips: ["0.0.0.0/0", "::/0"]
-          }
+            source_ips: ["0.0.0.0/0", "::/0"],
+          },
         ],
-        labels: { component: "security" }
+        labels: { component: "security" },
       });
 
       expect(fw.id).toBeDefined();
@@ -58,17 +62,17 @@ describe("Hetzner Firewall", () => {
             direction: "in",
             protocol: "tcp",
             port: "80",
-            source_ips: ["0.0.0.0/0", "::/0"]
+            source_ips: ["0.0.0.0/0", "::/0"],
           },
           {
             direction: "in",
             protocol: "tcp",
             port: "443",
-            source_ips: ["0.0.0.0/0", "::/0"]
-          }
+            source_ips: ["0.0.0.0/0", "::/0"],
+          },
         ],
         applyTo: [server], // Use resource object
-        labels: { component: "security" }
+        labels: { component: "security" },
       });
 
       expect(fw.rules).toHaveLength(2);
@@ -76,11 +80,15 @@ describe("Hetzner Firewall", () => {
       expect(fw.appliedTo[0].server.id).toBe(parseInt(server.id));
 
       // 4. Verify via API
-      const { firewall: apiFw } = await api.get<{ firewall: any }>(`/firewalls/${fw.id}`);
+      const { firewall: apiFw } = await api.get<{
+        firewall: {
+          rules: unknown[];
+          applied_to: Array<{ server?: { id: number } }>;
+        };
+      }>(`/firewalls/${fw.id}`);
       expect(apiFw.rules).toHaveLength(2);
       expect(apiFw.applied_to).toHaveLength(1);
       expect(apiFw.applied_to[0].server.id).toBe(parseInt(server.id));
-
     } finally {
       await destroy(scope);
     }

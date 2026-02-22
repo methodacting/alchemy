@@ -7,9 +7,11 @@ import { LoadBalancer } from "../../src/hetzner/load-balancer.ts";
 import { Network } from "../../src/hetzner/network.ts";
 import { createHetznerApi } from "../../src/hetzner/api.ts";
 import { BRANCH_PREFIX } from "../util.ts";
+
 import "../../src/test/vitest.ts";
 
-const api = createHetznerApi();
+const stableSuffix =
+  BRANCH_PREFIX.replace(/[^a-zA-Z0-9]/g, "").slice(0, 12) || "alchemy";
 
 const test = alchemy.test(import.meta, {
   prefix: BRANCH_PREFIX,
@@ -22,18 +24,24 @@ describe("Hetzner LoadBalancer", () => {
       return;
     }
 
-    const baseName = `${BRANCH_PREFIX}-lb-test-${Date.now()}`;
-    let server: any;
-    let lb: any;
-    let net: any;
+    const api = createHetznerApi();
+
+    const baseName = `${BRANCH_PREFIX}-lb-test-${stableSuffix}`;
+    let server: Server;
+    let lb: LoadBalancer;
+    let net: Network;
 
     try {
       // 1. Create Network (required for private targets)
       net = await Network(`${baseName}-net`, {
         ipRange: "10.0.0.0/16",
         subnets: [
-          { type: "cloud", network_zone: "eu-central", ip_range: "10.0.1.0/24" }
-        ]
+          {
+            type: "cloud",
+            network_zone: "eu-central",
+            ip_range: "10.0.1.0/24",
+          },
+        ],
       });
 
       // 2. Create Server
@@ -41,7 +49,7 @@ describe("Hetzner LoadBalancer", () => {
         serverType: "cx23",
         image: "ubuntu-24.04",
         location: "hel1",
-        networks: [net]
+        networks: [net],
       });
 
       // 3. Create Load Balancer in same zone
@@ -49,13 +57,9 @@ describe("Hetzner LoadBalancer", () => {
         loadBalancerType: "lb11",
         networkZone: "eu-central",
         network: net,
-        services: [
-          { protocol: "http", listen_port: 80, destination_port: 80 }
-        ],
-        targets: [
-          { type: "server", server: server, usePrivateIp: true }
-        ],
-        labels: { project: "alchemy" }
+        services: [{ protocol: "http", listen_port: 80, destination_port: 80 }],
+        targets: [{ type: "server", server: server, usePrivateIp: true }],
+        labels: { project: "alchemy" },
       });
 
       expect(lb.id).toBeDefined();
@@ -73,23 +77,26 @@ describe("Hetzner LoadBalancer", () => {
         algorithm: "least_connections",
         services: [
           { protocol: "http", listen_port: 80, destination_port: 80 },
-          { protocol: "tcp", listen_port: 443, destination_port: 443 }
+          { protocol: "tcp", listen_port: 443, destination_port: 443 },
         ],
-        targets: [
-          { type: "server", server: server, usePrivateIp: true }
-        ],
-        labels: { project: "alchemy" }
+        targets: [{ type: "server", server: server, usePrivateIp: true }],
+        labels: { project: "alchemy" },
       });
 
       expect(lb.algorithm).toBe("least_connections");
       expect(lb.services).toHaveLength(2);
 
       // Verify via API
-      const { load_balancer: apiLb } = await api.get<{ load_balancer: any }>(`/load_balancers/${lb.id}`);
+      const { load_balancer: apiLb } = await api.get<{
+        load_balancer: {
+          algorithm: { type: string };
+          services: unknown[];
+          targets: unknown[];
+        };
+      }>(`/load_balancers/${lb.id}`);
       expect(apiLb.algorithm.type).toBe("least_connections");
       expect(apiLb.services).toHaveLength(2);
       expect(apiLb.targets).toHaveLength(1);
-
     } finally {
       await destroy(scope);
     }

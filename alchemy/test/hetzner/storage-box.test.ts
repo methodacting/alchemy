@@ -7,11 +7,12 @@ import { StorageBoxSubaccount } from "../../src/hetzner/storage-box-subaccount.t
 import { File } from "../../src/fs/file.ts";
 import { createHetznerApi } from "../../src/hetzner/api.ts";
 import { BRANCH_PREFIX } from "../util.ts";
+
 import "../../src/test/vitest.ts";
-import { Secret } from "../../src/secret.ts";
 import { withExponentialBackoff } from "../../src/util/retry.ts";
 
-const api = createHetznerApi({}, "robot");
+const stableSuffix =
+  BRANCH_PREFIX.replace(/[^a-zA-Z0-9]/g, "").slice(0, 12) || "alchemy";
 
 describe("Hetzner StorageBox", () => {
   const test = alchemy.test(import.meta, {
@@ -24,11 +25,13 @@ describe("Hetzner StorageBox", () => {
       return;
     }
 
-    const baseName = `sb-${Date.now()}`;
-    const boxPassword = `AlchemyFunctional!${Date.now()}`;
-    let box: any;
-    let sub: any;
-    let localFile: any;
+    const api = createHetznerApi({}, "robot");
+
+    const baseName = `${BRANCH_PREFIX}-sb-${stableSuffix}`;
+    const boxPassword = `AlchemyFunctional!${stableSuffix}`;
+    let box: StorageBox;
+    let sub: StorageBoxSubaccount;
+    let localFile: File;
 
     try {
       // 1. Create Storage Box
@@ -38,8 +41,8 @@ describe("Hetzner StorageBox", () => {
         password: alchemy.secret(boxPassword),
         accessSettings: {
           webdav_enabled: true,
-          reachable_externally: true
-        }
+          reachable_externally: true,
+        },
       });
 
       expect(box.id).toBeDefined();
@@ -51,8 +54,8 @@ describe("Hetzner StorageBox", () => {
         homeDirectory: "test-sub",
         password: alchemy.secret("SubPass123!@#"),
         accessSettings: {
-          webdav_enabled: true
-        }
+          webdav_enabled: true,
+        },
       });
 
       expect(sub.id).toBeDefined();
@@ -61,46 +64,49 @@ describe("Hetzner StorageBox", () => {
       expect(sub.username).toContain(box.username);
 
       // 3. Functional WebDAV Upload using local File resource
-      const fileContent = `Alchemy Functional Test ${Date.now()}`;
+      const fileContent = `Alchemy Functional Test ${stableSuffix}`;
       localFile = await File(`${baseName}-local.txt`, {
         path: `./${baseName}-upload.txt`,
-        content: fileContent
+        content: fileContent,
       });
 
       // Attempt to upload via WebDAV
       // Note: Storage Boxes take a few moments to sync the password to the WebDAV service.
       const uploadUrl = `https://${box.server}/test-upload.txt`;
-      const auth = Buffer.from(`${box.username}:${boxPassword}`).toString("base64");
+      const auth = Buffer.from(`${box.username}:${boxPassword}`).toString(
+        "base64",
+      );
 
       await withExponentialBackoff(
         async () => {
-            const response = await fetch(uploadUrl, {
-                method: "PUT",
-                headers: {
-                    "Authorization": `Basic ${auth}`,
-                    "Content-Type": "text/plain"
-                },
-                body: fileContent
-            });
+          const response = await fetch(uploadUrl, {
+            method: "PUT",
+            headers: {
+              Authorization: `Basic ${auth}`,
+              "Content-Type": "text/plain",
+            },
+            body: fileContent,
+          });
 
-            if (!response.ok) {
-                const text = await response.text();
-                throw new Error(`WebDAV Upload Failed (${response.status}): ${text}`);
-            }
+          if (!response.ok) {
+            const text = await response.text();
+            throw new Error(
+              `WebDAV Upload Failed (${response.status}): ${text}`,
+            );
+          }
         },
         () => true, // Retry on any connection/auth error during propagation
         30,
         5000,
-        20000
+        20000,
       );
 
       // 4. Verify Download
       const getResponse = await fetch(uploadUrl, {
-          headers: { "Authorization": `Basic ${auth}` }
+        headers: { Authorization: `Basic ${auth}` },
       });
       const downloadedContent = await getResponse.text();
       expect(downloadedContent).toBe(fileContent);
-
     } finally {
       await destroy(scope);
     }

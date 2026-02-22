@@ -51,7 +51,10 @@ export interface FloatingIPProps extends HetznerApiOptions {
   delete?: boolean;
 }
 
-export type FloatingIP = Omit<FloatingIPProps, "adopt" | "token" | "server" | "delete"> & {
+export type FloatingIP = Omit<
+  FloatingIPProps,
+  "adopt" | "token" | "server" | "delete"
+> & {
   id: string;
   name: string;
   ip: string;
@@ -75,17 +78,21 @@ export const FloatingIP = Resource(
   async function (
     this: Context<FloatingIP>,
     id: string,
-    props: FloatingIPProps
+    props: FloatingIPProps,
   ): Promise<FloatingIP> {
     const api = createHetznerApi(props);
-    const name = props.name ?? this.output?.name ?? this.scope.createPhysicalName(id);
+    const name =
+      props.name ?? this.output?.name ?? this.scope.createPhysicalName(id);
 
     if (this.phase === "delete") {
       if (props.delete !== false && this.output?.id) {
         try {
           await api.delete(`/floating_ips/${this.output.id}`);
         } catch (error: any) {
-          if (!error.message?.includes("404") && !error.message?.includes("not found")) {
+          if (
+            !error.message?.includes("404") &&
+            !error.message?.includes("not found")
+          ) {
             throw error;
           }
         }
@@ -105,17 +112,25 @@ export const FloatingIP = Resource(
     let ipId = this.output?.id;
     let ipData: any;
 
-    const serverId = props.server ? (typeof props.server === "object" ? parseInt(props.server.id) : parseInt(props.server.toString())) : undefined;
+    const serverId = props.server
+      ? typeof props.server === "object"
+        ? parseInt(props.server.id)
+        : parseInt(props.server.toString())
+      : undefined;
 
     if (this.phase === "create" || !ipId) {
       if (props.adopt && !this.isReplacement) {
         try {
-          const { floating_ips } = await api.get<{ floating_ips: any[] }>(`/floating_ips?name=${name}`);
+          const { floating_ips } = await api.get<{ floating_ips: any[] }>(
+            `/floating_ips?name=${name}`,
+          );
           if (floating_ips.length > 0) {
             ipId = floating_ips[0].id;
             ipData = floating_ips[0];
           }
-        } catch (e) { /* ignore */ }
+        } catch (e) {
+          /* ignore */
+        }
       }
 
       if (!ipId || this.isReplacement) {
@@ -130,7 +145,7 @@ export const FloatingIP = Resource(
 
         const response = await api.post<{ floating_ip: any }>(
           "/floating_ips",
-          payload
+          payload,
         );
         ipData = response.floating_ip;
         ipId = ipData.id;
@@ -142,16 +157,21 @@ export const FloatingIP = Resource(
         props.description !== this.output.description ||
         JSON.stringify(props.labels) !== JSON.stringify(this.output.labels)
       ) {
-        const response = await api.put<{ floating_ip: any }>(`/floating_ips/${ipId}`, {
-          name,
-          description: props.description,
-          labels: props.labels,
-        });
+        const response = await api.put<{ floating_ip: any }>(
+          `/floating_ips/${ipId}`,
+          {
+            name,
+            description: props.description,
+            labels: props.labels,
+          },
+        );
         ipData = response.floating_ip;
       }
 
       // Sync assignment
-      const currentServerId = this.output.server ? parseInt(this.output.server) : undefined;
+      const currentServerId = this.output.server
+        ? parseInt(this.output.server)
+        : undefined;
       if (currentServerId !== serverId) {
         if (currentServerId) {
           await api.post(`/floating_ips/${ipId}/actions/unassign`);
@@ -162,27 +182,35 @@ export const FloatingIP = Resource(
             predicate: (res) => res.floating_ip.server === null,
             initialDelay: 1000,
             maxDelay: 5000,
-            timeout: 60000
+            timeout: 60000,
           });
         }
         if (serverId) {
-          await api.post(`/floating_ips/${ipId}/actions/assign`, { server: serverId });
+          await api.post(`/floating_ips/${ipId}/actions/assign`, {
+            server: serverId,
+          });
           // Wait for assign
           await poll({
             description: `floating ip ${ipId} assignment to server ${serverId}`,
             fn: () => api.get<{ floating_ip: any }>(`/floating_ips/${ipId}`),
-            predicate: (res) => res.floating_ip.server !== null && res.floating_ip.server === serverId,
+            predicate: (res) =>
+              res.floating_ip.server !== null &&
+              res.floating_ip.server === serverId,
             initialDelay: 1000,
             maxDelay: 5000,
-            timeout: 60000
+            timeout: 60000,
           });
         }
-        const response = await api.get<{ floating_ip: any }>(`/floating_ips/${ipId}`);
+        const response = await api.get<{ floating_ip: any }>(
+          `/floating_ips/${ipId}`,
+        );
         ipData = response.floating_ip;
       }
 
       if (!ipData) {
-        const response = await api.get<{ floating_ip: any }>(`/floating_ips/${ipId}`);
+        const response = await api.get<{ floating_ip: any }>(
+          `/floating_ips/${ipId}`,
+        );
         ipData = response.floating_ip;
       }
     }
@@ -199,12 +227,12 @@ export const FloatingIP = Resource(
       created: ipData.created,
       type: "hetzner::FloatingIP",
     } as any; // Cast because Omit and type property conflict slightly
-  }
+  },
 );
 
 /**
  * Type guard for FloatingIP resource
  */
-export function isFloatingIP(resource: any): resource is FloatingIP {
-  return resource?.[ResourceKind] === "hetzner::FloatingIP";
+export function isFloatingIP(resource: unknown): resource is FloatingIP {
+  return (resource as any)?.[ResourceKind] === "hetzner::FloatingIP";
 }

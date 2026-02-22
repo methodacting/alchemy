@@ -65,10 +65,12 @@ export const DNSRecord = Resource(
   async function (
     this: Context<DNSRecord>,
     id: string,
-    props: DNSRecordProps
+    props: DNSRecordProps,
   ): Promise<DNSRecord> {
     const api = createHetznerApi(props);
-    const zoneId = isDNSZone(props.zone) ? props.zone.id : props.zone.toString();
+    const zoneId = isDNSZone(props.zone)
+      ? props.zone.id
+      : props.zone.toString();
     const rrsetName = props.name;
     const rrsetType = props.type;
 
@@ -77,7 +79,10 @@ export const DNSRecord = Resource(
         try {
           await api.delete(`/zones/${zoneId}/rrsets/${this.output.id}`);
         } catch (error: any) {
-          if (!error.message?.includes("404") && !error.message?.includes("not found")) {
+          if (
+            !error.message?.includes("404") &&
+            !error.message?.includes("not found")
+          ) {
             throw error;
           }
         }
@@ -86,10 +91,7 @@ export const DNSRecord = Resource(
     }
 
     if (this.phase === "update" && this.output) {
-      if (
-        this.output.name !== props.name ||
-        this.output.type !== props.type
-      ) {
+      if (this.output.name !== props.name || this.output.type !== props.type) {
         return this.replace(true);
       }
     }
@@ -97,17 +99,23 @@ export const DNSRecord = Resource(
     let rrsetId = this.output?.id;
     let rrsetData: HetznerRRSet | undefined;
 
-    const desiredRecords: HetznerDNSRecord[] = (Array.isArray(props.value) ? props.value : [props.value]).map(v => ({ value: v }));
+    const desiredRecords: HetznerDNSRecord[] = (
+      Array.isArray(props.value) ? props.value : [props.value]
+    ).map((v) => ({ value: v }));
 
     if (this.phase === "create" || !rrsetId) {
       if (props.adopt && !this.isReplacement) {
         try {
           // Hetzner RRSet ID format is name/type
           const searchId = `${rrsetName}/${rrsetType}`;
-          const response = await api.get<{ rrset: HetznerRRSet }>(`/zones/${zoneId}/rrsets/${searchId}`);
+          const response = await api.get<{ rrset: HetznerRRSet }>(
+            `/zones/${zoneId}/rrsets/${searchId}`,
+          );
           rrsetData = response.rrset;
           rrsetId = rrsetData.id;
-        } catch (e) { /* ignore */ }
+        } catch (e) {
+          /* ignore */
+        }
       }
 
       if (!rrsetId || this.isReplacement) {
@@ -119,7 +127,7 @@ export const DNSRecord = Resource(
             ttl: props.ttl,
             records: desiredRecords,
             labels: props.labels,
-          }
+          },
         );
         rrsetData = response.rrset;
         rrsetId = rrsetData.id;
@@ -127,20 +135,26 @@ export const DNSRecord = Resource(
     } else {
       // Update mutable properties (value/records, ttl, labels)
       if (
-        JSON.stringify(this.output.records) !== JSON.stringify(desiredRecords) ||
+        JSON.stringify(this.output.records) !==
+          JSON.stringify(desiredRecords) ||
         props.ttl !== this.output.ttl ||
         JSON.stringify(props.labels) !== JSON.stringify(this.output.labels)
       ) {
-        const response = await api.put<{ rrset: HetznerRRSet }>(`/zones/${zoneId}/rrsets/${rrsetId}`, {
-          name: rrsetName,
-          type: rrsetType,
-          ttl: props.ttl,
-          records: desiredRecords,
-          labels: props.labels,
-        });
+        const response = await api.put<{ rrset: HetznerRRSet }>(
+          `/zones/${zoneId}/rrsets/${rrsetId}`,
+          {
+            name: rrsetName,
+            type: rrsetType,
+            ttl: props.ttl,
+            records: desiredRecords,
+            labels: props.labels,
+          },
+        );
         rrsetData = response.rrset;
       } else {
-        const response = await api.get<{ rrset: HetznerRRSet }>(`/zones/${zoneId}/rrsets/${rrsetId}`);
+        const response = await api.get<{ rrset: HetznerRRSet }>(
+          `/zones/${zoneId}/rrsets/${rrsetId}`,
+        );
         rrsetData = response.rrset;
       }
     }
@@ -150,18 +164,18 @@ export const DNSRecord = Resource(
       zone: zoneId,
       name: rrsetData!.name,
       type: rrsetData!.type,
-      value: rrsetData!.records.map(r => r.value),
+      value: rrsetData!.records.map((r) => r.value),
       records: rrsetData!.records,
       ttl: rrsetData!.ttl ?? undefined,
       labels: rrsetData!.labels,
       type: "hetzner::DNSRecord",
     };
-  }
+  },
 );
 
 /**
  * Type guard for DNSRecord resource
  */
-export function isDNSRecord(resource: any): resource is DNSRecord {
-  return resource?.[ResourceKind] === "hetzner::DNSRecord";
+export function isDNSRecord(resource: unknown): resource is DNSRecord {
+  return (resource as any)?.[ResourceKind] === "hetzner::DNSRecord";
 }

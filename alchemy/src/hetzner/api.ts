@@ -7,7 +7,7 @@ export interface HetznerApiOptions {
   /**
    * API Token to use (overrides HCLOUD_TOKEN env var)
    */
-  token?: Secret;
+  token?: string | Secret;
 }
 
 /**
@@ -26,9 +26,20 @@ export class HetznerApi {
    * @param options API options
    * @param type The API type to use ("cloud" or "robot")
    */
-  constructor(options: HetznerApiOptions = {}, type: "cloud" | "robot" = "cloud") {
-    this.baseUrl = type === "cloud" ? "https://api.hetzner.cloud/v1" : "https://api.hetzner.com/v1";
-    this.token = options.token?.unencrypted ?? process.env.HCLOUD_TOKEN ?? "";
+  constructor(
+    options: HetznerApiOptions = {},
+    type: "cloud" | "robot" = "cloud",
+  ) {
+    this.baseUrl =
+      type === "cloud"
+        ? "https://api.hetzner.cloud/v1"
+        : "https://api.hetzner.com/v1";
+    this.token =
+      (typeof options.token === "string"
+        ? options.token
+        : options.token?.unencrypted) ??
+      process.env.HCLOUD_TOKEN ??
+      "";
 
     if (!this.token) {
       throw new Error("HCLOUD_TOKEN environment variable is required");
@@ -68,9 +79,10 @@ export class HetznerApi {
         errorData = { message: await response.text() };
       }
       // Hetzner error object structure: { error: { code: string, message: string, ... } }
-      const errorMessage = errorData.error?.message || JSON.stringify(errorData);
+      const errorMessage =
+        errorData.error?.message || JSON.stringify(errorData);
       throw new Error(
-        `Hetzner API Error (${response.status}): ${errorMessage}`
+        `Hetzner API Error (${response.status}): ${errorMessage}`,
       );
     }
 
@@ -94,7 +106,7 @@ export class HetznerApi {
   async post<T = any>(
     path: string,
     body: any,
-    init: RequestInit = {}
+    init: RequestInit = {},
   ): Promise<T> {
     return this.fetch<T>(path, {
       ...init,
@@ -109,7 +121,7 @@ export class HetznerApi {
   async put<T = any>(
     path: string,
     body: any,
-    init: RequestInit = {}
+    init: RequestInit = {},
   ): Promise<T> {
     return this.fetch<T>(path, {
       ...init,
@@ -134,7 +146,7 @@ export class HetznerApi {
  */
 export function createHetznerApi(
   options: Partial<HetznerApiOptions> = {},
-  type: "cloud" | "robot" = "cloud"
+  type: "cloud" | "robot" = "cloud",
 ): HetznerApi {
   return new HetznerApi(options, type);
 }

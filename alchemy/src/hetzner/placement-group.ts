@@ -27,7 +27,10 @@ export interface PlacementGroupProps extends HetznerApiOptions {
   adopt?: boolean;
 }
 
-export type PlacementGroup = Omit<PlacementGroupProps, "adopt" | "token" | "type"> & {
+export type PlacementGroup = Omit<
+  PlacementGroupProps,
+  "adopt" | "token" | "type"
+> & {
   id: string;
   name: string;
   placementGroupType: "spread";
@@ -49,17 +52,21 @@ export const PlacementGroup = Resource(
   async function (
     this: Context<PlacementGroup>,
     id: string,
-    props: PlacementGroupProps
+    props: PlacementGroupProps,
   ): Promise<PlacementGroup> {
     const api = createHetznerApi(props);
-    const name = props.name ?? this.output?.name ?? this.scope.createPhysicalName(id);
+    const name =
+      props.name ?? this.output?.name ?? this.scope.createPhysicalName(id);
 
     if (this.phase === "delete") {
       if (this.output?.id) {
         try {
           await api.delete(`/placement_groups/${this.output.id}`);
         } catch (error: any) {
-          if (!error.message?.includes("404") && !error.message?.includes("not found")) {
+          if (
+            !error.message?.includes("404") &&
+            !error.message?.includes("not found")
+          ) {
             throw error;
           }
         }
@@ -68,7 +75,10 @@ export const PlacementGroup = Resource(
     }
 
     if (this.phase === "update" && this.output) {
-      if (this.output.placementGroupType !== props.type && props.type !== undefined) {
+      if (
+        this.output.placementGroupType !== props.type &&
+        props.type !== undefined
+      ) {
         return this.replace(true);
       }
     }
@@ -79,12 +89,16 @@ export const PlacementGroup = Resource(
     if (this.phase === "create" || !pgId) {
       if (props.adopt && !this.isReplacement) {
         try {
-          const { placement_groups } = await api.get<{ placement_groups: any[] }>(`/placement_groups?name=${name}`);
+          const { placement_groups } = await api.get<{
+            placement_groups: any[];
+          }>(`/placement_groups?name=${name}`);
           if (placement_groups.length > 0) {
             pgId = placement_groups[0].id;
             pgData = placement_groups[0];
           }
-        } catch (e) { /* ignore */ }
+        } catch (e) {
+          /* ignore */
+        }
       }
 
       if (!pgId || this.isReplacement) {
@@ -94,21 +108,29 @@ export const PlacementGroup = Resource(
             name,
             type: props.type ?? "spread",
             labels: props.labels,
-          }
+          },
         );
         pgData = response.placement_group;
         pgId = pgData.id;
       }
     } else {
       // Update mutable properties (name, labels)
-      if (props.name !== this.output.name || JSON.stringify(props.labels) !== JSON.stringify(this.output.labels)) {
-        const response = await api.put<{ placement_group: any }>(`/placement_groups/${pgId}`, {
-          name,
-          labels: props.labels,
-        });
+      if (
+        props.name !== this.output.name ||
+        JSON.stringify(props.labels) !== JSON.stringify(this.output.labels)
+      ) {
+        const response = await api.put<{ placement_group: any }>(
+          `/placement_groups/${pgId}`,
+          {
+            name,
+            labels: props.labels,
+          },
+        );
         pgData = response.placement_group;
       } else {
-        const response = await api.get<{ placement_group: any }>(`/placement_groups/${pgId}`);
+        const response = await api.get<{ placement_group: any }>(
+          `/placement_groups/${pgId}`,
+        );
         pgData = response.placement_group;
       }
     }
@@ -122,12 +144,14 @@ export const PlacementGroup = Resource(
       created: pgData.created,
       type: "hetzner::PlacementGroup",
     };
-  }
+  },
 );
 
 /**
  * Type guard for PlacementGroup resource
  */
-export function isPlacementGroup(resource: any): resource is PlacementGroup {
-  return resource?.[ResourceKind] === "hetzner::PlacementGroup";
+export function isPlacementGroup(
+  resource: unknown,
+): resource is PlacementGroup {
+  return (resource as any)?.[ResourceKind] === "hetzner::PlacementGroup";
 }

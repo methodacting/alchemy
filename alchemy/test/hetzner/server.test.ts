@@ -7,11 +7,12 @@ import { createHetznerApi } from "../../src/hetzner/api.ts";
 import { BRANCH_PREFIX } from "../util.ts";
 import "../../src/test/vitest.ts";
 
-const api = createHetznerApi();
+const stableSuffix =
+  BRANCH_PREFIX.replace(/[^a-zA-Z0-9]/g, "").slice(0, 12) || "alchemy";
 
 const test = alchemy.test(import.meta, {
   prefix: BRANCH_PREFIX,
-  password: "test-password"
+  password: "test-password",
 });
 
 describe("Hetzner Server", () => {
@@ -22,8 +23,10 @@ describe("Hetzner Server", () => {
       return;
     }
 
+    const api = createHetznerApi();
+
     const serverName = `${BRANCH_PREFIX}-test-server`;
-    let server: any;
+    let server: Server;
 
     try {
       // 1. Create
@@ -50,13 +53,14 @@ describe("Hetzner Server", () => {
         location: "hel1",
         labels: { env: "prod" }, // changed
       });
-      
+
       expect(server.labels).toEqual({ env: "prod" });
 
       // Verify update via API
-      const { server: apiServer } = await api.get<{ server: any }>(`/servers/${server.id}`);
+      const { server: apiServer } = await api.get<{
+        server: { labels: Record<string, string> };
+      }>(`/servers/${server.id}`);
       expect(apiServer.labels).toEqual({ env: "prod" });
-
     } finally {
       // 3. Destroy
       await destroy(scope);

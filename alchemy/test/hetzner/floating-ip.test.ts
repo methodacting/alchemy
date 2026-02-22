@@ -6,9 +6,11 @@ import { Server } from "../../src/hetzner/server.ts";
 import { FloatingIP } from "../../src/hetzner/floating-ip.ts";
 import { createHetznerApi } from "../../src/hetzner/api.ts";
 import { BRANCH_PREFIX } from "../util.ts";
+
 import "../../src/test/vitest.ts";
 
-const api = createHetznerApi();
+const stableSuffix =
+  BRANCH_PREFIX.replace(/[^a-zA-Z0-9]/g, "").slice(0, 12) || "alchemy";
 
 const test = alchemy.test(import.meta, {
   prefix: BRANCH_PREFIX,
@@ -21,9 +23,11 @@ describe("Hetzner FloatingIP", () => {
       return;
     }
 
-    const baseName = `fip-${Date.now()}`;
-    let server: any;
-    let fip: any;
+    const api = createHetznerApi();
+
+    const baseName = `${BRANCH_PREFIX}-fip-${stableSuffix}`;
+    let server: Server;
+    let fip: FloatingIP;
 
     try {
       // 1. Create Server
@@ -37,7 +41,7 @@ describe("Hetzner FloatingIP", () => {
       fip = await FloatingIP(`${baseName}-ip`, {
         type: "ipv4",
         homeLocation: "hel1",
-        labels: { test: "true" }
+        labels: { test: "true" },
       });
 
       expect(fip.id).toBeDefined();
@@ -49,24 +53,25 @@ describe("Hetzner FloatingIP", () => {
         type: "ipv4",
         homeLocation: "hel1",
         server: server,
-        labels: { test: "true" }
+        labels: { test: "true" },
       });
 
       expect(fip.server).toBe(server.id);
 
       // Verify via API
-      const { floating_ip: apiFip } = await api.get<{ floating_ip: any }>(`/floating_ips/${fip.id}`);
+      const { floating_ip: apiFip } = await api.get<{
+        floating_ip: { server: number | null };
+      }>(`/floating_ips/${fip.id}`);
       expect(apiFip.server).toBe(parseInt(server.id));
 
       // 4. Unassign
       fip = await FloatingIP(`${baseName}-ip`, {
         type: "ipv4",
         homeLocation: "hel1",
-        labels: { test: "true" }
+        labels: { test: "true" },
       });
 
       expect(fip.server).toBeUndefined();
-
     } finally {
       await destroy(scope);
     }

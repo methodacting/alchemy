@@ -66,9 +66,9 @@ export type HetznerLocation =
   | "nbg1" // Nuremberg
   | "fsn1" // Falkenstein
   | "hel1" // Helsinki
-  | "ash"  // Ashburn, VA
-  | "hil"  // Hillsboro, OR
-  | "sin"  // Singapore
+  | "ash" // Ashburn, VA
+  | "hil" // Hillsboro, OR
+  | "sin" // Singapore
   // Fallback
   | (string & {});
 
@@ -274,7 +274,12 @@ export type HetznerFloatingIPType = "ipv4" | "ipv6";
 /**
  * Hetzner Cloud Storage Box Type
  */
-export type HetznerStorageBoxType = "bx11" | "bx21" | "bx31" | "bx41" | (string & {});
+export type HetznerStorageBoxType =
+  | "bx11"
+  | "bx21"
+  | "bx31"
+  | "bx41"
+  | (string & {});
 
 /**
  * Hetzner Cloud Storage Box Access Settings
@@ -291,4 +296,3 @@ export interface HetznerStorageBoxAccessSettings {
   /** Whether ZFS is enabled */
   zfs_enabled?: boolean;
 }
-

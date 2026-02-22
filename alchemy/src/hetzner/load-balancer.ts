@@ -54,11 +54,16 @@ export interface LoadBalancerProps extends HetznerApiOptions {
   /**
    * Services provided by the load balancer
    */
-  services?: Array<Omit<HetznerLoadBalancerService, "http"> & {
-    http?: Omit<NonNullable<HetznerLoadBalancerService["http"]>, "certificates"> & {
-      certificates?: Array<number | string | Certificate>;
-    };
-  }>;
+  services?: Array<
+    Omit<HetznerLoadBalancerService, "http"> & {
+      http?: Omit<
+        NonNullable<HetznerLoadBalancerService["http"]>,
+        "certificates"
+      > & {
+        certificates?: Array<number | string | Certificate>;
+      };
+    }
+  >;
 
   /**
    * Targets for the load balancer
@@ -82,7 +87,10 @@ export interface LoadBalancerProps extends HetznerApiOptions {
   adopt?: boolean;
 }
 
-export type LoadBalancer = Omit<LoadBalancerProps, "adopt" | "token" | "targets" | "network"> & {
+export type LoadBalancer = Omit<
+  LoadBalancerProps,
+  "adopt" | "token" | "targets" | "network"
+> & {
   id: string;
   name: string;
   publicIpv4: string;
@@ -110,17 +118,21 @@ export const LoadBalancer = Resource(
   async function (
     this: Context<LoadBalancer>,
     id: string,
-    props: LoadBalancerProps
+    props: LoadBalancerProps,
   ): Promise<LoadBalancer> {
     const api = createHetznerApi(props);
-    const name = props.name ?? this.output?.name ?? this.scope.createPhysicalName(id);
+    const name =
+      props.name ?? this.output?.name ?? this.scope.createPhysicalName(id);
 
     if (this.phase === "delete") {
       if (this.output?.id) {
         try {
           await api.delete(`/load_balancers/${this.output.id}`);
         } catch (error: any) {
-          if (!error.message?.includes("404") && !error.message?.includes("not found")) {
+          if (
+            !error.message?.includes("404") &&
+            !error.message?.includes("not found")
+          ) {
             throw error;
           }
         }
@@ -142,42 +154,70 @@ export const LoadBalancer = Resource(
     let lbData: any;
 
     // Normalize targets to API format
-    const normalizedTargets: HetznerLoadBalancerTarget[] = (props.targets ?? []).map(t => {
+    const normalizedTargets: HetznerLoadBalancerTarget[] = (
+      props.targets ?? []
+    ).map((t) => {
       if (t.type === "server") {
-        const serverId = typeof t.server === "object" ? parseInt(t.server.id) : parseInt(t.server.toString());
-        return { type: "server", server: { id: serverId }, use_private_ip: t.usePrivateIp };
+        const serverId =
+          typeof t.server === "object"
+            ? parseInt(t.server.id)
+            : parseInt(t.server.toString());
+        return {
+          type: "server",
+          server: { id: serverId },
+          use_private_ip: t.usePrivateIp,
+        };
       }
       if (t.type === "label_selector") {
-        return { type: "label_selector", label_selector: { selector: t.selector }, use_private_ip: t.usePrivateIp };
+        return {
+          type: "label_selector",
+          label_selector: { selector: t.selector },
+          use_private_ip: t.usePrivateIp,
+        };
       }
       return { type: "ip", ip: { ip: t.ip } };
     });
 
     // Normalize network to ID
-    const networkId = props.network ? (typeof props.network === "object" ? parseInt(props.network.id) : parseInt(props.network.toString())) : undefined;
+    const networkId = props.network
+      ? typeof props.network === "object"
+        ? parseInt(props.network.id)
+        : parseInt(props.network.toString())
+      : undefined;
 
     // Normalize services
-    const normalizedServices: HetznerLoadBalancerService[] = (props.services ?? []).map(s => {
-      const http = s.http ? {
-        ...s.http,
-        certificates: (s.http.certificates ?? []).map(c => {
-          if (typeof c === "string" || typeof c === "number") return parseInt(c.toString());
-          if (isCertificate(c)) return parseInt(c.id);
-          return 0;
-        }).filter(id => id > 0)
-      } : undefined;
+    const normalizedServices: HetznerLoadBalancerService[] = (
+      props.services ?? []
+    ).map((s) => {
+      const http = s.http
+        ? {
+            ...s.http,
+            certificates: (s.http.certificates ?? [])
+              .map((c) => {
+                if (typeof c === "string" || typeof c === "number")
+                  return parseInt(c.toString());
+                if (isCertificate(c)) return parseInt(c.id);
+                return 0;
+              })
+              .filter((id) => id > 0),
+          }
+        : undefined;
       return { ...s, http } as HetznerLoadBalancerService;
     });
 
     if (this.phase === "create" || !lbId) {
       if (props.adopt && !this.isReplacement) {
         try {
-          const { load_balancers } = await api.get<{ load_balancers: any[] }>(`/load_balancers?name=${name}`);
+          const { load_balancers } = await api.get<{ load_balancers: any[] }>(
+            `/load_balancers?name=${name}`,
+          );
           if (load_balancers.length > 0) {
             lbId = load_balancers[0].id;
             lbData = load_balancers[0];
           }
-        } catch (e) { /* ignore */ }
+        } catch (e) {
+          /* ignore */
+        }
       }
 
       if (!lbId || this.isReplacement) {
@@ -197,7 +237,7 @@ export const LoadBalancer = Resource(
 
         const response = await api.post<{ load_balancer: any }>(
           "/load_balancers",
-          payload
+          payload,
         );
         lbData = response.load_balancer;
         lbId = lbData.id;
@@ -209,11 +249,14 @@ export const LoadBalancer = Resource(
         props.algorithm !== this.output.algorithm ||
         JSON.stringify(props.labels) !== JSON.stringify(this.output.labels)
       ) {
-        const response = await api.put<{ load_balancer: any }>(`/load_balancers/${lbId}`, {
-          name,
-          algorithm: props.algorithm ? { type: props.algorithm } : undefined,
-          labels: props.labels,
-        });
+        const response = await api.put<{ load_balancer: any }>(
+          `/load_balancers/${lbId}`,
+          {
+            name,
+            algorithm: props.algorithm ? { type: props.algorithm } : undefined,
+            labels: props.labels,
+          },
+        );
         lbData = response.load_balancer;
       }
 
@@ -221,26 +264,38 @@ export const LoadBalancer = Resource(
       const currentServices = this.output.services ?? [];
       const desiredServices = normalizedServices;
 
-      // Comparison is tricky because of optional fields and nested objects. 
+      // Comparison is tricky because of optional fields and nested objects.
       // Simplest is to check stringified versions if order is stable, but Hetzner might reorder.
       if (JSON.stringify(currentServices) !== JSON.stringify(desiredServices)) {
-         // Hetzner doesn't have a "set_services" action. 
-         // Must add/update/delete individually.
-         
-         for (const curr of currentServices) {
-            if (!desiredServices.some(d => d.listen_port === curr.listen_port)) {
-                await api.post(`/load_balancers/${lbId}/actions/delete_service`, { listen_port: curr.listen_port });
-            }
-         }
-         
-         for (const desired of desiredServices) {
-            const curr = currentServices.find(c => c.listen_port === desired.listen_port);
-            if (!curr) {
-                await api.post(`/load_balancers/${lbId}/actions/add_service`, desired);
-            } else if (JSON.stringify(curr) !== JSON.stringify(desired)) {
-                await api.post(`/load_balancers/${lbId}/actions/update_service`, desired);
-            }
-         }
+        // Hetzner doesn't have a "set_services" action.
+        // Must add/update/delete individually.
+
+        for (const curr of currentServices) {
+          if (
+            !desiredServices.some((d) => d.listen_port === curr.listen_port)
+          ) {
+            await api.post(`/load_balancers/${lbId}/actions/delete_service`, {
+              listen_port: curr.listen_port,
+            });
+          }
+        }
+
+        for (const desired of desiredServices) {
+          const curr = currentServices.find(
+            (c) => c.listen_port === desired.listen_port,
+          );
+          if (!curr) {
+            await api.post(
+              `/load_balancers/${lbId}/actions/add_service`,
+              desired,
+            );
+          } else if (JSON.stringify(curr) !== JSON.stringify(desired)) {
+            await api.post(
+              `/load_balancers/${lbId}/actions/update_service`,
+              desired,
+            );
+          }
+        }
       }
 
       // Sync targets
@@ -248,35 +303,56 @@ export const LoadBalancer = Resource(
       const desiredTargets = normalizedTargets;
 
       if (JSON.stringify(currentTargets) !== JSON.stringify(desiredTargets)) {
-          const toRemove = currentTargets.filter(c => !desiredTargets.some(d => JSON.stringify(d) === JSON.stringify(c)));
-          const toAdd = desiredTargets.filter(d => !currentTargets.some(c => JSON.stringify(c) === JSON.stringify(d)));
+        const toRemove = currentTargets.filter(
+          (c) =>
+            !desiredTargets.some(
+              (d) => JSON.stringify(d) === JSON.stringify(c),
+            ),
+        );
+        const toAdd = desiredTargets.filter(
+          (d) =>
+            !currentTargets.some(
+              (c) => JSON.stringify(c) === JSON.stringify(d),
+            ),
+        );
 
-          for (const t of toRemove) {
-              await api.post(`/load_balancers/${lbId}/actions/remove_target`, t);
-          }
-          for (const t of toAdd) {
-              await api.post(`/load_balancers/${lbId}/actions/add_target`, t);
-          }
+        for (const t of toRemove) {
+          await api.post(`/load_balancers/${lbId}/actions/remove_target`, t);
+        }
+        for (const t of toAdd) {
+          await api.post(`/load_balancers/${lbId}/actions/add_target`, t);
+        }
       }
 
       // Sync network
-      const currentNetworkId = this.output.network ? parseInt(this.output.network) : undefined;
+      const currentNetworkId = this.output.network
+        ? parseInt(this.output.network)
+        : undefined;
       if (currentNetworkId !== networkId) {
-          if (currentNetworkId) {
-              await api.post(`/load_balancers/${lbId}/actions/detach_from_network`, { network: currentNetworkId });
-          }
-          if (networkId) {
-              await api.post(`/load_balancers/${lbId}/actions/attach_to_network`, { network: networkId });
-          }
+        if (currentNetworkId) {
+          await api.post(
+            `/load_balancers/${lbId}/actions/detach_from_network`,
+            { network: currentNetworkId },
+          );
+        }
+        if (networkId) {
+          await api.post(`/load_balancers/${lbId}/actions/attach_to_network`, {
+            network: networkId,
+          });
+        }
       }
 
-      const response = await api.get<{ load_balancer: any }>(`/load_balancers/${lbId}`);
+      const response = await api.get<{ load_balancer: any }>(
+        `/load_balancers/${lbId}`,
+      );
       lbData = response.load_balancer;
     }
 
     if (!lbData && lbId) {
-        const response = await api.get<{ load_balancer: any }>(`/load_balancers/${lbId}`);
-        lbData = response.load_balancer;
+      const response = await api.get<{ load_balancer: any }>(
+        `/load_balancers/${lbId}`,
+      );
+      lbData = response.load_balancer;
     }
 
     return {
@@ -295,12 +371,12 @@ export const LoadBalancer = Resource(
       created: lbData.created,
       type: "hetzner::LoadBalancer",
     };
-  }
+  },
 );
 
 /**
  * Type guard for LoadBalancer resource
  */
-export function isLoadBalancer(resource: any): resource is LoadBalancer {
-  return resource?.[ResourceKind] === "hetzner::LoadBalancer";
+export function isLoadBalancer(resource: unknown): resource is LoadBalancer {
+  return (resource as any)?.[ResourceKind] === "hetzner::LoadBalancer";
 }

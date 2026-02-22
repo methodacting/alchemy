@@ -48,17 +48,21 @@ export const SSHKey = Resource(
   async function (
     this: Context<SSHKey>,
     id: string,
-    props: SSHKeyProps
+    props: SSHKeyProps,
   ): Promise<SSHKey> {
     const api = createHetznerApi(props);
-    const name = props.name ?? this.output?.name ?? this.scope.createPhysicalName(id);
+    const name =
+      props.name ?? this.output?.name ?? this.scope.createPhysicalName(id);
 
     if (this.phase === "delete") {
       if (this.output?.id) {
         try {
           await api.delete(`/ssh_keys/${this.output.id}`);
         } catch (error: any) {
-          if (!error.message?.includes("404") && !error.message?.includes("not found")) {
+          if (
+            !error.message?.includes("404") &&
+            !error.message?.includes("not found")
+          ) {
             throw error;
           }
         }
@@ -78,7 +82,9 @@ export const SSHKey = Resource(
     if (this.phase === "create" || !keyId) {
       if (props.adopt && !this.isReplacement) {
         try {
-          const { ssh_keys } = await api.get<{ ssh_keys: any[] }>(`/ssh_keys?name=${name}`);
+          const { ssh_keys } = await api.get<{ ssh_keys: any[] }>(
+            `/ssh_keys?name=${name}`,
+          );
           if (ssh_keys.length > 0) {
             keyId = ssh_keys[0].id;
             keyData = ssh_keys[0];
@@ -89,20 +95,20 @@ export const SSHKey = Resource(
       }
 
       if (!keyId || this.isReplacement) {
-        const response = await api.post<{ ssh_key: any }>(
-          "/ssh_keys",
-          {
-            name,
-            public_key: props.publicKey,
-            labels: props.labels,
-          }
-        );
+        const response = await api.post<{ ssh_key: any }>("/ssh_keys", {
+          name,
+          public_key: props.publicKey,
+          labels: props.labels,
+        });
         keyData = response.ssh_key;
         keyId = keyData.id;
       }
     } else {
       // Update mutable properties (name, labels)
-      if (props.name !== this.output.name || JSON.stringify(props.labels) !== JSON.stringify(this.output.labels)) {
+      if (
+        props.name !== this.output.name ||
+        JSON.stringify(props.labels) !== JSON.stringify(this.output.labels)
+      ) {
         const response = await api.put<{ ssh_key: any }>(`/ssh_keys/${keyId}`, {
           name,
           labels: props.labels,
@@ -123,12 +129,12 @@ export const SSHKey = Resource(
       created: keyData.created,
       type: "hetzner::SSHKey",
     };
-  }
+  },
 );
 
 /**
  * Type guard for SSHKey resource
  */
-export function isSSHKey(resource: any): resource is SSHKey {
-  return resource?.[ResourceKind] === "hetzner::SSHKey";
+export function isSSHKey(resource: unknown): resource is SSHKey {
+  return (resource as any)?.[ResourceKind] === "hetzner::SSHKey";
 }

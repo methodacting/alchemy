@@ -6,9 +6,12 @@ import { DNSZone } from "../../src/hetzner/dns-zone.ts";
 import { DNSRecord } from "../../src/hetzner/dns-record.ts";
 import { createHetznerApi } from "../../src/hetzner/api.ts";
 import { BRANCH_PREFIX } from "../util.ts";
+import type { HetznerRRSet } from "../../src/hetzner/types.ts";
+
 import "../../src/test/vitest.ts";
 
-const api = createHetznerApi();
+const stableSuffix =
+  BRANCH_PREFIX.replace(/[^a-zA-Z0-9]/g, "").slice(0, 12) || "alchemy";
 
 const test = alchemy.test(import.meta, {
   prefix: BRANCH_PREFIX,
@@ -21,17 +24,19 @@ describe("Hetzner DNS", () => {
       return;
     }
 
+    const api = createHetznerApi();
+
     // Use a random test domain
-    const domainName = `${BRANCH_PREFIX}-${Date.now()}.com`;
-    let zone: any;
-    let record: any;
+    const domainName = `${BRANCH_PREFIX}-${stableSuffix}.com`;
+    let zone: DNSZone;
+    let record: DNSRecord;
 
     try {
       // 1. Create Zone
       zone = await DNSZone("test-zone", {
         name: domainName,
         ttl: 3600,
-        labels: { test: "true" }
+        labels: { test: "true" },
       });
 
       expect(zone.id).toBeDefined();
@@ -43,7 +48,7 @@ describe("Hetzner DNS", () => {
         zone,
         name: "www",
         type: "A",
-        value: "1.2.3.4"
+        value: "1.2.3.4",
       });
 
       expect(record.id).toBe("www/A");
@@ -54,15 +59,16 @@ describe("Hetzner DNS", () => {
         zone,
         name: "www",
         type: "A",
-        value: ["1.2.3.4", "5.6.7.8"]
+        value: ["1.2.3.4", "5.6.7.8"],
       });
 
       expect(record.value).toEqual(["1.2.3.4", "5.6.7.8"]);
 
       // Verify via API
-      const { rrset } = await api.get<{ rrset: any }>(`/zones/${zone.id}/rrsets/www/A`);
-      expect(rrset.records.map((r: any) => r.value)).toContain("5.6.7.8");
-
+      const { rrset } = await api.get<{ rrset: HetznerRRSet }>(
+        `/zones/${zone.id}/rrsets/www/A`,
+      );
+      expect(rrset.records.map((r) => r.value)).toContain("5.6.7.8");
     } finally {
       await destroy(scope);
     }

@@ -45,7 +45,10 @@ export interface StorageBoxSubaccountProps extends HetznerApiOptions {
   adopt?: boolean;
 }
 
-export type StorageBoxSubaccount = Omit<StorageBoxSubaccountProps, "adopt" | "token" | "password" | "box"> & {
+export type StorageBoxSubaccount = Omit<
+  StorageBoxSubaccountProps,
+  "adopt" | "token" | "password" | "box"
+> & {
   id: string;
   boxId: string;
   username: string;
@@ -71,7 +74,7 @@ export const StorageBoxSubaccount = Resource(
   async function (
     this: Context<StorageBoxSubaccount>,
     id: string,
-    props: StorageBoxSubaccountProps
+    props: StorageBoxSubaccountProps,
   ): Promise<StorageBoxSubaccount> {
     const api = createHetznerApi(props, "robot");
     const boxId = isStorageBox(props.box) ? props.box.id : props.box.toString();
@@ -79,9 +82,14 @@ export const StorageBoxSubaccount = Resource(
     if (this.phase === "delete") {
       if (this.output?.id) {
         try {
-          await api.delete(`/storage_boxes/${boxId}/subaccounts/${this.output.id}`);
+          await api.delete(
+            `/storage_boxes/${boxId}/subaccounts/${this.output.id}`,
+          );
         } catch (error: any) {
-          if (!error.message?.includes("404") && !error.message?.includes("not found")) {
+          if (
+            !error.message?.includes("404") &&
+            !error.message?.includes("not found")
+          ) {
             throw error;
           }
         }
@@ -95,15 +103,21 @@ export const StorageBoxSubaccount = Resource(
     if (this.phase === "create" || !subId) {
       if (props.adopt && !this.isReplacement) {
         try {
-          const { subaccounts } = await api.get<{ subaccounts: any[] }>(`/storage_boxes/${boxId}/subaccounts`);
+          const { subaccounts } = await api.get<{ subaccounts: any[] }>(
+            `/storage_boxes/${boxId}/subaccounts`,
+          );
           // Note: Subaccounts don't have unique names in the same way, usually identified by ID or index.
           // We'll search for one with matching home directory or labels if possible.
-          const existing = subaccounts.find(s => s.home_directory === props.homeDirectory);
+          const existing = subaccounts.find(
+            (s) => s.home_directory === props.homeDirectory,
+          );
           if (existing) {
             subId = existing.id;
             subData = existing;
           }
-        } catch (e) { /* ignore */ }
+        } catch (e) {
+          /* ignore */
+        }
       }
 
       if (!subId || this.isReplacement) {
@@ -117,24 +131,29 @@ export const StorageBoxSubaccount = Resource(
 
         const response = await api.post<{ subaccount: any; action?: any }>(
           `/storage_boxes/${boxId}/subaccounts`,
-          payload
+          payload,
         );
         subData = response.subaccount;
         subId = subData.id;
 
         if (response.action) {
-            await poll({
-                description: `subaccount ${subId} creation`,
-                fn: () => api.get<{ action: any }>(`/storage_boxes/actions/${response.action.id}`),
-                predicate: (res) => res.action.status === "success",
-                initialDelay: 1000,
-                maxDelay: 5000,
-                timeout: 60000
-            });
+          await poll({
+            description: `subaccount ${subId} creation`,
+            fn: () =>
+              api.get<{ action: any }>(
+                `/storage_boxes/actions/${response.action.id}`,
+              ),
+            predicate: (res) => res.action.status === "success",
+            initialDelay: 1000,
+            maxDelay: 5000,
+            timeout: 60000,
+          });
         }
-        
+
         // Fetch fresh subaccount data
-        const freshResponse = await api.get<{ subaccount: any }>(`/storage_boxes/${boxId}/subaccounts/${subId}`);
+        const freshResponse = await api.get<{ subaccount: any }>(
+          `/storage_boxes/${boxId}/subaccounts/${subId}`,
+        );
         subData = freshResponse.subaccount;
       }
     } else {
@@ -143,53 +162,77 @@ export const StorageBoxSubaccount = Resource(
         props.readOnly !== this.output.readOnly ||
         JSON.stringify(props.labels) !== JSON.stringify(this.output.labels)
       ) {
-        const response = await api.put<{ subaccount: any }>(`/storage_boxes/${boxId}/subaccounts/${subId}`, {
-          read_only: props.readOnly,
-          labels: props.labels,
-        });
+        const response = await api.put<{ subaccount: any }>(
+          `/storage_boxes/${boxId}/subaccounts/${subId}`,
+          {
+            read_only: props.readOnly,
+            labels: props.labels,
+          },
+        );
         subData = response.subaccount;
       }
 
       // Sync home directory
       if (props.homeDirectory !== this.output.homeDirectory) {
-        const response = await api.post<{ action: any }>(`/storage_boxes/${boxId}/subaccounts/${subId}/actions/change_home_directory`, {
-          home_directory: props.homeDirectory
-        });
+        const response = await api.post<{ action: any }>(
+          `/storage_boxes/${boxId}/subaccounts/${subId}/actions/change_home_directory`,
+          {
+            home_directory: props.homeDirectory,
+          },
+        );
         await poll({
-            description: `subaccount ${subId} home directory change`,
-            fn: () => api.get<{ action: any }>(`/storage_boxes/actions/${response.action.id}`),
-            predicate: (res) => res.action.status === "success",
-            initialDelay: 1000,
-            maxDelay: 5000,
-            timeout: 60000
+          description: `subaccount ${subId} home directory change`,
+          fn: () =>
+            api.get<{ action: any }>(
+              `/storage_boxes/actions/${response.action.id}`,
+            ),
+          predicate: (res) => res.action.status === "success",
+          initialDelay: 1000,
+          maxDelay: 5000,
+          timeout: 60000,
         });
       }
 
       // Sync access settings
-      if (JSON.stringify(props.accessSettings) !== JSON.stringify(this.output.accessSettings)) {
-        const response = await api.post<{ action: any }>(`/storage_boxes/${boxId}/subaccounts/${subId}/actions/update_access_settings`, props.accessSettings);
+      if (
+        JSON.stringify(props.accessSettings) !==
+        JSON.stringify(this.output.accessSettings)
+      ) {
+        const response = await api.post<{ action: any }>(
+          `/storage_boxes/${boxId}/subaccounts/${subId}/actions/update_access_settings`,
+          props.accessSettings,
+        );
         await poll({
-            description: `subaccount ${subId} access settings update`,
-            fn: () => api.get<{ action: any }>(`/storage_boxes/actions/${response.action.id}`),
-            predicate: (res) => res.action.status === "success",
-            initialDelay: 1000,
-            maxDelay: 5000,
-            timeout: 60000
+          description: `subaccount ${subId} access settings update`,
+          fn: () =>
+            api.get<{ action: any }>(
+              `/storage_boxes/actions/${response.action.id}`,
+            ),
+          predicate: (res) => res.action.status === "success",
+          initialDelay: 1000,
+          maxDelay: 5000,
+          timeout: 60000,
         });
       }
 
       // Fetch fresh data
-      const response = await api.get<{ subaccount: any }>(`/storage_boxes/${boxId}/subaccounts/${subId}`);
+      const response = await api.get<{ subaccount: any }>(
+        `/storage_boxes/${boxId}/subaccounts/${subId}`,
+      );
       subData = response.subaccount;
     }
 
     if (!subData && subId) {
-        const response = await api.get<{ subaccount: any }>(`/storage_boxes/${boxId}/subaccounts/${subId}`);
-        subData = response.subaccount;
+      const response = await api.get<{ subaccount: any }>(
+        `/storage_boxes/${boxId}/subaccounts/${subId}`,
+      );
+      subData = response.subaccount;
     }
 
     // Get parent box data for server info
-    const { storage_box: boxData } = await api.get<{ storage_box: any }>(`/storage_boxes/${boxId}`);
+    const { storage_box: boxData } = await api.get<{ storage_box: any }>(
+      `/storage_boxes/${boxId}`,
+    );
 
     return {
       id: subData.id.toString(),
@@ -202,12 +245,14 @@ export const StorageBoxSubaccount = Resource(
       labels: subData.labels,
       type: "hetzner::StorageBoxSubaccount",
     };
-  }
+  },
 );
 
 /**
  * Type guard for StorageBoxSubaccount resource
  */
-export function isStorageBoxSubaccount(resource: any): resource is StorageBoxSubaccount {
-  return resource?.[ResourceKind] === "hetzner::StorageBoxSubaccount";
+export function isStorageBoxSubaccount(
+  resource: unknown,
+): resource is StorageBoxSubaccount {
+  return (resource as any)?.[ResourceKind] === "hetzner::StorageBoxSubaccount";
 }

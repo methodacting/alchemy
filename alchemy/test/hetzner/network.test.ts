@@ -6,9 +6,11 @@ import { Server } from "../../src/hetzner/server.ts";
 import { Network } from "../../src/hetzner/network.ts";
 import { createHetznerApi } from "../../src/hetzner/api.ts";
 import { BRANCH_PREFIX } from "../util.ts";
+
 import "../../src/test/vitest.ts";
 
-const api = createHetznerApi();
+const stableSuffix =
+  BRANCH_PREFIX.replace(/[^a-zA-Z0-9]/g, "").slice(0, 12) || "alchemy";
 
 const test = alchemy.test(import.meta, {
   prefix: BRANCH_PREFIX,
@@ -21,18 +23,24 @@ describe("Hetzner Network", () => {
       return;
     }
 
-    const baseName = `${BRANCH_PREFIX}-net-test-${Date.now()}`;
-    let net: any;
-    let server: any;
+    const api = createHetznerApi();
+
+    const baseName = `${BRANCH_PREFIX}-net-test-${stableSuffix}`;
+    let net: Network;
+    let server: Server;
 
     try {
       // 1. Create Network with subnet
       net = await Network(`${baseName}-priv`, {
         ipRange: "10.0.0.0/16",
         subnets: [
-          { type: "cloud", network_zone: "eu-central", ip_range: "10.0.1.0/24" }
+          {
+            type: "cloud",
+            network_zone: "eu-central",
+            ip_range: "10.0.1.0/24",
+          },
         ],
-        labels: { layer: "private" }
+        labels: { layer: "private" },
       });
 
       expect(net.id).toBeDefined();
@@ -45,7 +53,7 @@ describe("Hetzner Network", () => {
         serverType: "cx23",
         image: "ubuntu-24.04",
         location: "hel1",
-        networks: [net]
+        networks: [net],
       });
 
       expect(server.networks).toContain(net.id);
@@ -56,12 +64,14 @@ describe("Hetzner Network", () => {
       net = await Network(`${baseName}-priv`, {
         ipRange: "10.0.0.0/16",
         subnets: [
-          { type: "cloud", network_zone: "eu-central", ip_range: "10.0.1.0/24" }
+          {
+            type: "cloud",
+            network_zone: "eu-central",
+            ip_range: "10.0.1.0/24",
+          },
         ],
-        routes: [
-          { destination: "10.100.1.0/24", gateway: privateIp }
-        ],
-        labels: { layer: "private", updated: "true" }
+        routes: [{ destination: "10.100.1.0/24", gateway: privateIp }],
+        labels: { layer: "private", updated: "true" },
       });
 
       expect(net.routes).toHaveLength(1);
@@ -69,11 +79,12 @@ describe("Hetzner Network", () => {
       expect(net.routes[0].gateway).toBe(privateIp);
 
       // 4. Verify via API
-      const { network: apiNet } = await api.get<{ network: any }>(`/networks/${net.id}`);
+      const { network: apiNet } = await api.get<{
+        network: { labels: Record<string, string> };
+      }>(`/networks/${net.id}`);
       expect(apiNet.subnets).toHaveLength(1);
       expect(apiNet.routes).toHaveLength(1);
       expect(apiNet.labels.updated).toBe("true");
-
     } finally {
       await destroy(scope);
     }

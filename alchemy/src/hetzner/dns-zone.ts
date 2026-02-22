@@ -55,7 +55,7 @@ export const DNSZone = Resource(
   async function (
     this: Context<DNSZone>,
     id: string,
-    props: DNSZoneProps
+    props: DNSZoneProps,
   ): Promise<DNSZone> {
     const api = createHetznerApi(props);
     const name = props.name;
@@ -65,7 +65,10 @@ export const DNSZone = Resource(
         try {
           await api.delete(`/zones/${this.output.id}`);
         } catch (error: any) {
-          if (!error.message?.includes("404") && !error.message?.includes("not found")) {
+          if (
+            !error.message?.includes("404") &&
+            !error.message?.includes("not found")
+          ) {
             throw error;
           }
         }
@@ -79,35 +82,38 @@ export const DNSZone = Resource(
     if (this.phase === "create" || !zoneId) {
       if (props.adopt && !this.isReplacement) {
         try {
-          const { zones } = await api.get<{ zones: any[] }>(`/zones?name=${name}`);
+          const { zones } = await api.get<{ zones: any[] }>(
+            `/zones?name=${name}`,
+          );
           if (zones.length > 0) {
             zoneId = zones[0].id;
             zoneData = zones[0];
           }
-        } catch (e) { /* ignore */ }
+        } catch (e) {
+          /* ignore */
+        }
       }
 
       if (!zoneId || this.isReplacement) {
-        const response = await api.post<{ zone: any }>(
-          "/zones",
-          {
-            name,
-            ttl: props.ttl ?? 3600,
-            labels: props.labels,
-            mode: "primary",
-          }
-        );
+        const response = await api.post<{ zone: any }>("/zones", {
+          name,
+          ttl: props.ttl ?? 3600,
+          labels: props.labels,
+          mode: "primary",
+        });
         zoneData = response.zone;
         zoneId = zoneData.id;
 
         // Wait for zone to be ok and have nameservers
         await poll({
-            description: `zone ${zoneId} initialization`,
-            fn: () => api.get<{ zone: any }>(`/zones/${zoneId}`),
-            predicate: (res) => res.zone.status === "ok" && (res.zone.authoritative_nameservers?.assigned?.length ?? 0) > 0,
-            initialDelay: 2000,
-            maxDelay: 10000,
-            timeout: 60000
+          description: `zone ${zoneId} initialization`,
+          fn: () => api.get<{ zone: any }>(`/zones/${zoneId}`),
+          predicate: (res) =>
+            res.zone.status === "ok" &&
+            (res.zone.authoritative_nameservers?.assigned?.length ?? 0) > 0,
+          initialDelay: 2000,
+          maxDelay: 10000,
+          timeout: 60000,
         });
 
         const freshResponse = await api.get<{ zone: any }>(`/zones/${zoneId}`);
@@ -115,7 +121,7 @@ export const DNSZone = Resource(
       }
     } else {
       // Update mutable properties (name, labels, ttl)
-      // Note: Changing name of a zone is usually not possible without replacement, 
+      // Note: Changing name of a zone is usually not possible without replacement,
       // but Hetzner PUT /zones/{id} documentation shows it might be allowed for some fields.
       if (
         props.name !== this.output.name ||
@@ -144,12 +150,12 @@ export const DNSZone = Resource(
       created: zoneData.created,
       type: "hetzner::DNSZone",
     };
-  }
+  },
 );
 
 /**
  * Type guard for DNSZone resource
  */
-export function isDNSZone(resource: any): resource is DNSZone {
-  return resource?.[ResourceKind] === "hetzner::DNSZone";
+export function isDNSZone(resource: unknown): resource is DNSZone {
+  return (resource as any)?.[ResourceKind] === "hetzner::DNSZone";
 }

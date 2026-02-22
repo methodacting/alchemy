@@ -6,9 +6,11 @@ import { Server } from "../../src/hetzner/server.ts";
 import { Volume } from "../../src/hetzner/volume.ts";
 import { createHetznerApi } from "../../src/hetzner/api.ts";
 import { BRANCH_PREFIX } from "../util.ts";
+
 import "../../src/test/vitest.ts";
 
-const api = createHetznerApi();
+const stableSuffix =
+  BRANCH_PREFIX.replace(/[^a-zA-Z0-9]/g, "").slice(0, 12) || "alchemy";
 
 const test = alchemy.test(import.meta, {
   prefix: BRANCH_PREFIX,
@@ -22,9 +24,11 @@ describe("Hetzner Volume", () => {
       return;
     }
 
-    const baseName = `${BRANCH_PREFIX}-test-${Date.now()}`;
-    let server: any;
-    let volume: any;
+    const api = createHetznerApi();
+
+    const baseName = `${BRANCH_PREFIX}-test-${stableSuffix}`;
+    let server: Server;
+    let volume: Volume;
 
     try {
       // 1. Create Server
@@ -39,7 +43,7 @@ describe("Hetzner Volume", () => {
         size: 10, // Min size
         location: "hel1",
         format: "ext4",
-        labels: { role: "data" }
+        labels: { role: "data" },
       });
 
       expect(volume.id).toBeDefined();
@@ -54,7 +58,7 @@ describe("Hetzner Volume", () => {
         format: "ext4",
         labels: { role: "data" },
         server: server.id,
-        automount: true
+        automount: true,
       });
 
       expect(volume.server).toBe(server.id);
@@ -66,28 +70,30 @@ describe("Hetzner Volume", () => {
         format: "ext4",
         labels: { role: "data" },
         server: server.id,
-        automount: true
+        automount: true,
       });
 
       expect(volume.size).toBe(11);
 
       // 5. Verify Resize via API
-      const { volume: apiVolume } = await api.get<{ volume: any }>(`/volumes/${volume.id}`);
+      const { volume: apiVolume } = await api.get<{ volume: { size: number } }>(
+        `/volumes/${volume.id}`,
+      );
       expect(apiVolume.size).toBe(11);
 
       // 6. Fail on decrease
       try {
         await Volume(`${baseName}-volume`, {
-            size: 10,
-            location: "hel1",
-            format: "ext4",
-            server: server.id
+          size: 10,
+          location: "hel1",
+          format: "ext4",
+          server: server.id,
         });
         throw new Error("Should have failed");
-      } catch (e: any) {
-        expect(e.message).toContain("Cannot decrease volume size");
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : String(e);
+        expect(message).toContain("Cannot decrease volume size");
       }
-
     } finally {
       await destroy(scope);
     }

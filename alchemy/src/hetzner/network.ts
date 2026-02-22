@@ -68,17 +68,21 @@ export const Network = Resource(
   async function (
     this: Context<Network>,
     id: string,
-    props: NetworkProps
+    props: NetworkProps,
   ): Promise<Network> {
     const api = createHetznerApi(props);
-    const name = props.name ?? this.output?.name ?? this.scope.createPhysicalName(id);
+    const name =
+      props.name ?? this.output?.name ?? this.scope.createPhysicalName(id);
 
     if (this.phase === "delete") {
       if (this.output?.id) {
         try {
           await api.delete(`/networks/${this.output.id}`);
         } catch (error: any) {
-          if (!error.message?.includes("404") && !error.message?.includes("not found")) {
+          if (
+            !error.message?.includes("404") &&
+            !error.message?.includes("not found")
+          ) {
             throw error;
           }
         }
@@ -98,7 +102,9 @@ export const Network = Resource(
     if (this.phase === "create" || !networkId) {
       if (props.adopt && !this.isReplacement) {
         try {
-          const { networks } = await api.get<{ networks: any[] }>(`/networks?name=${name}`);
+          const { networks } = await api.get<{ networks: any[] }>(
+            `/networks?name=${name}`,
+          );
           if (networks.length > 0) {
             networkId = networks[0].id;
             networkData = networks[0];
@@ -109,17 +115,14 @@ export const Network = Resource(
       }
 
       if (!networkId || this.isReplacement) {
-        const response = await api.post<{ network: any }>(
-          "/networks",
-          {
-            name,
-            ip_range: props.ipRange,
-            subnets: props.subnets,
-            routes: props.routes,
-            expose_routes_to_vswitch: props.exposeRoutesToVswitch,
-            labels: props.labels,
-          }
-        );
+        const response = await api.post<{ network: any }>("/networks", {
+          name,
+          ip_range: props.ipRange,
+          subnets: props.subnets,
+          routes: props.routes,
+          expose_routes_to_vswitch: props.exposeRoutesToVswitch,
+          labels: props.labels,
+        });
         networkData = response.network;
         networkId = networkData.id;
       }
@@ -130,11 +133,14 @@ export const Network = Resource(
         JSON.stringify(props.labels) !== JSON.stringify(this.output.labels) ||
         props.exposeRoutesToVswitch !== this.output.exposeRoutesToVswitch
       ) {
-        const response = await api.put<{ network: any }>(`/networks/${networkId}`, {
-          name,
-          labels: props.labels,
-          expose_routes_to_vswitch: props.exposeRoutesToVswitch,
-        });
+        const response = await api.put<{ network: any }>(
+          `/networks/${networkId}`,
+          {
+            name,
+            labels: props.labels,
+            expose_routes_to_vswitch: props.exposeRoutesToVswitch,
+          },
+        );
         networkData = response.network;
       }
 
@@ -142,15 +148,25 @@ export const Network = Resource(
       const currentSubnets = this.output.subnets ?? [];
       const desiredSubnets = props.subnets ?? [];
 
-      const subnetsToDelete = currentSubnets.filter(curr => 
-        !desiredSubnets.some(next => next.ip_range === curr.ip_range && next.type === curr.type)
+      const subnetsToDelete = currentSubnets.filter(
+        (curr) =>
+          !desiredSubnets.some(
+            (next) =>
+              next.ip_range === curr.ip_range && next.type === curr.type,
+          ),
       );
-      const subnetsToAdd = desiredSubnets.filter(next => 
-        !currentSubnets.some(curr => curr.ip_range === next.ip_range && curr.type === next.type)
+      const subnetsToAdd = desiredSubnets.filter(
+        (next) =>
+          !currentSubnets.some(
+            (curr) =>
+              curr.ip_range === next.ip_range && curr.type === next.type,
+          ),
       );
 
       for (const subnet of subnetsToDelete) {
-        await api.post(`/networks/${networkId}/actions/delete_subnet`, { ip_range: subnet.ip_range });
+        await api.post(`/networks/${networkId}/actions/delete_subnet`, {
+          ip_range: subnet.ip_range,
+        });
       }
       for (const subnet of subnetsToAdd) {
         await api.post(`/networks/${networkId}/actions/add_subnet`, subnet);
@@ -160,11 +176,21 @@ export const Network = Resource(
       const currentRoutes = this.output.routes ?? [];
       const desiredRoutes = props.routes ?? [];
 
-      const routesToDelete = currentRoutes.filter(curr => 
-        !desiredRoutes.some(next => next.destination === curr.destination && next.gateway === curr.gateway)
+      const routesToDelete = currentRoutes.filter(
+        (curr) =>
+          !desiredRoutes.some(
+            (next) =>
+              next.destination === curr.destination &&
+              next.gateway === curr.gateway,
+          ),
       );
-      const routesToAdd = desiredRoutes.filter(next => 
-        !currentRoutes.some(curr => curr.destination === next.destination && curr.gateway === next.gateway)
+      const routesToAdd = desiredRoutes.filter(
+        (next) =>
+          !currentRoutes.some(
+            (curr) =>
+              curr.destination === next.destination &&
+              curr.gateway === next.gateway,
+          ),
       );
 
       for (const route of routesToDelete) {
@@ -174,7 +200,9 @@ export const Network = Resource(
         await api.post(`/networks/${networkId}/actions/add_route`, route);
       }
 
-      const response = await api.get<{ network: any }>(`/networks/${networkId}`);
+      const response = await api.get<{ network: any }>(
+        `/networks/${networkId}`,
+      );
       networkData = response.network;
     }
 
@@ -190,12 +218,12 @@ export const Network = Resource(
       created: networkData.created,
       type: "hetzner::Network",
     };
-  }
+  },
 );
 
 /**
  * Type guard for Network resource
  */
-export function isNetwork(resource: any): resource is Network {
-  return resource?.[ResourceKind] === "hetzner::Network";
+export function isNetwork(resource: unknown): resource is Network {
+  return (resource as any)?.[ResourceKind] === "hetzner::Network";
 }
